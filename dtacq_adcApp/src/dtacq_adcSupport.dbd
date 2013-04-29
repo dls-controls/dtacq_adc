@@ -1,0 +1,2 @@
+registrar("dtacq_adcRegister")
+registrar("BPM_calc_register")
