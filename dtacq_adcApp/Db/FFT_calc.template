@@ -1,0 +1,104 @@
+# Macros:
+# % macro, P, Device Prefix
+# % macro, R, Device Suffix
+# % macro, PORT, Asyn Port name
+# % macro, TIMEOUT, Timeout
+# % macro, ADDR, Asyn Port address
+
+# All tags starting with gdatag are DLS specific for GDA
+# % gdatag, template, FFT_calc, $(PORT)_FFT_calc, $(PORT) FFT_calc class instance
+
+# This associates the template with an edm screen
+# % gui, $(PORT), edmtab, FFT_calc.edl, P=$(P),R=$(R)
+
+###################################################################
+#  These records control the label for the ROI                    #
+###################################################################
+# % gdatag, pv, rw, $(PORT)_FFT_calc, Label, Set Label
+# % autosave 2 
+record(stringout, "$(P)$(R)Name")
+{
+   field(PINI, "YES")
+   field(DTYP, "asynOctetWrite")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NAME")
+}
+
+# % gdatag, pv, ro, $(PORT)_FFT_calc, Label_RBV, Readback for Label
+record(stringin, "$(P)$(R)Name_RBV")
+{
+   field(DTYP, "asynOctetRead")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))NAME")
+   field(SCAN, "I/O Intr")
+}
+
+record(mbbo, "$(P)$(R)Window")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT), $(ADDR),$(TIMEOUT))Window")
+    field(ZRST, "Rectangle")
+    field(ZRVL, "0")
+    field(ONST, "Hann")
+    field(ONVL, "1")
+    field(TWST, "Hamming")
+    field(TWVL, "2")
+    field(THST, "Blackman")
+    field(THVL, "3")
+    field(FRST, "Blackman-Harris")
+    field(FRVL, "4")
+    field(FVST, "Kaiser-Bessel")
+    field(FVVL, "5")
+    field(SXST, "Gaussian")
+    field(SXVL, "6")
+}
+
+record(mbbi, "$(P)$(R)Window_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT), $(ADDR),$(TIMEOUT))Window")
+    field(ZRST, "Rectangle")
+    field(ZRVL, "0")
+    field(ONST, "Hann")
+    field(ONVL, "1")
+    field(TWST, "Hamming")
+    field(TWVL, "2")
+    field(THST, "Blackman")
+    field(THVL, "3")
+    field(FRST, "Blackman-Harris")
+    field(FRVL, "4")
+    field(FVST, "Kaiser-Bessel")
+    field(FVVL, "5")
+    field(SXST, "Gaussian")
+    field(SXVL, "6")
+    field(SCAN, "I/O Intr")
+    field(FLNK, "$(P)$(R)WindowParamType.PROC")
+}
+
+record(ao, "$(P)$(R)WindowParameter")
+{
+    field(PINI, "YES")
+    field(DTYP, "asynFloat64")
+    field(OUT, "@asyn($(PORT), $(ADDR), $(TIMEOUT))WindowParameter")
+    field(PREC, "4")
+    field(VAL, "0.0")
+}
+
+record(ai, "$(P)$(R)WindowParameter_RBV")
+{
+    field(DTYP, "asynFloat64")
+    field(INP, "@asyn($(PORT), $(ADDR), $(TIMEOUT))WindowParameter")
+    field(PREC, "4")
+    field(SCAN, "I/O Intr")
+}
+
+record(mbbi, "$(P)$(R)WindowParamType")
+{
+    field(DTYP, "Raw Soft Channel")
+    field(INP, "$(P)$(R)Window")
+    field(THST, "Alpha")
+    field(THVL, "3") # Blackman
+    field(FVST, "Alpha")
+    field(FVVL, "5") # Keiser-Bessel
+    field(SXST, "Std. Dev.")
+    field(SXVL, "6") # Gaussian
+}

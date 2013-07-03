@@ -1,3 +1,27 @@
 <?xml version="1.0" ?>
 <components arch="linux-x86">
+	<dtacq_adc.dtacq_adc ADDR="0" DATATYPE="2" HEIGHT="500000" IP="adc0001:4210" P="TESTDTACQADC" PORT="CAM1.CAM" R=":CAM:" TIMEOUT="1" WIDTH="4"/>
+	<dtacq_adc.FFT_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.FFT" R=":FFT:" TIMEOUT="1"/>
+	<dtacq_adc.BPM_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.BPM" R=":BPM:" TIMEOUT="1"/>
+	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.ROI" R=":ROI:" TIMEOUT="1"/>
+	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NCHAN="1000" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.STAT" QUEUE="30" R=":STAT:" TIMEOUT="1" XSIZE="1600" YSIZE="1200"/>
+	<areaDetector.NDProcess ADDR="0" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.PROC" QUEUE="30" R=":PROC:" TIMEOUT="1"/>
+	<areaDetector.NDStdArrays ADDR="0" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" NELEMENTS="500000" P="TESTDTACQADC" PORT="CAM1.ARR" R=":ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDFileHDF5 ADDR="0" NDARRAY_ADDR="0" NDARRAY_PORT="CAM1.CAM" P="TESTDTACQADC" PORT="CAM1.HDF" R=":HDF:" TIMEOUT="1"/>
+	<areaDetector.NDAttributes attrname="CameraModel" datatype="STRING" description="Camera model" port="CAM1.CAM" source="MODEL" type="PARAM"/>
+	<areaDetector.NDAttributes attrname="RingCurrent" description="Machine Ring Current" port="CAM1.CAM" source="SR-DI-DCCT-01:SIGNAL"/>
+	<!--<areaDetector.NDAttributes attrname="StatCompute" datatype="INT" description="Statistics: enable stats computation" port="CAM1.STAT" source="COMPUTE_STATISTICS" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatMean" datatype="DOUBLE" description="Statistics: mean value" port="CAM1.STAT" source="MEAN_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatSigma" datatype="DOUBLE" description="Statistics: sigma value" port="CAM1.STAT" source="SIGMA_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatMin" datatype="DOUBLE" description="Statistics: minimum value" port="CAM1.STAT" source="MIN_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatMax" datatype="DOUBLE" description="Statistics: maximum value" port="CAM1.STAT" source="MAX_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatTotal" datatype="DOUBLE" description="Statistics: total sum of all pixels" port="CAM1.STAT" source="TOTAL" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatComputeCentroid" datatype="INT" description="Statistics: enable centroid calculation" port="CAM1.STAT" source="COMPUTE_CENTROID" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidThreshold" datatype="DOUBLE" description="Statistics: centroid threshold" port="CAM1.STAT" source="CENTROID_THRESHOLD" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidX" datatype="DOUBLE" description="Statistics: centroid X position" port="CAM1.STAT" source="CENTROIDX_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidY" datatype="DOUBLE" description="Statistics: centroid Y position" port="CAM1.STAT" source="CENTROIDY_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidSigmaX" datatype="DOUBLE" description="Statistics: centroid sigma X" port="CAM1.STAT" source="SIGMAX_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidSigmaY" datatype="DOUBLE" description="Statistics: centroid sigma Y" port="CAM1.STAT" source="SIGMAY_VALUE" type="PARAM"/>-->
+	<!--<areaDetector.NDAttributes attrname="StatCentroidSigmaXY" datatype="DOUBLE" description="Statistics: centroid sigma XY" port="CAM1.STAT" source="SIGMAXY_VALUE" type="PARAM"/>-->
+	<EPICS_BASE.EpicsEnvSet key="EPICS_CA_MAX_ARRAY_BYTES" value="6000000"/>
 </components>

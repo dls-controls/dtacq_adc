@@ -13,6 +13,7 @@ include $(TOP)/configure/CONFIG
 #
 DB += dtacq_adc.template
 DB += BPM_calc.template
+DB += FFT_calc.template
 
 #----------------------------------------------------
 # In a Diamond IOC Application, build db files from

@@ -1,2 +1,3 @@
 registrar("dtacq_adcRegister")
 registrar("BPM_calc_register")
+registrar("FFT_calc_register")
