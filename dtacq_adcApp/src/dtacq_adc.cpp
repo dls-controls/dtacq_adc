@@ -33,13 +33,10 @@
 #include <epicsExport.h>
 
 static const char *driverName = "dtacq_adc";
-
-/* Simulation detector driver; demonstrates most of the
-   features that areaDetector drivers can support. */
 class dtacq_adc : public ADDriver {
 public:
-    dtacq_adc(const char *portName, char *ipPortName, int maxSizeX,
-              int maxSizeY, NDDataType_t dataType, int maxBuffers,
+    dtacq_adc(const char *portName, char *ipPortName, int nChannels,
+              int nSamples, int maxBuffers,
               size_t maxMemory, int priority, int stackSize);
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -111,15 +108,14 @@ typedef enum {
 int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
-    size_t nread;
-    int eomReason, i = 0, total_read = 0;
+    size_t nread = 0;
+    int eomReason, total_read = 0;
     while (total_read < n_samples * n_channels) {
         status = pasynOctetSyncIO->read(pasynUserIP,
                                         (char *) this->pRaw->pData+total_read,
-                                        n_samples*n_channels*2, 5.0, &nread,
+                                        n_samples*n_channels*2 - nread, 5.0, &nread,
                                         &eomReason);
         total_read += nread;
-        i = nread;
     }
     if (status != asynSuccess) {
         printf("N read: %u %d %d\n", nread, eomReason, status);
@@ -231,7 +227,7 @@ int dtacq_adc::computeImage()
         /* Allocate the raw buffer we use to compute images. */
         dims[xDim] = maxSizeX;
         dims[yDim] = maxSizeY;
-        this->pRaw = this->pNDArrayPool->alloc(ndims, dims, dataType, 0, NULL);
+        this->pRaw = this->pNDArrayPool->alloc(ndims, dims, NDInt16, 0, NULL);
         if (!this->pRaw) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                       "%s:%s: error allocating raw buffer\n",
@@ -267,6 +263,14 @@ int dtacq_adc::computeImage()
     }
     pImage = this->pArrays[0];
     pImage->getInfo(&arrayInfo);
+    /* Multiply by a scale factor to convert -32767..32768 into -10V..10V
+     * Also divide by the binning factor so we get a sensible scale for averaging */
+    double mult = 10.0 / 32768 / binX / binY;
+    double * pData = (double *) pImage->pData;
+    for (unsigned int i=0; i<arrayInfo.nElements; i++) {
+    	pData[i] *= mult;
+    }
+
     status = asynSuccess;
     status |= setIntegerParam(NDArraySize,  (int)arrayInfo.totalBytes);
     status |= setIntegerParam(NDArraySizeX, (int)pImage->dims[xDim].size);
@@ -592,8 +596,8 @@ void dtacq_adc::report(FILE *fp, int details)
    \param[in] stackSize The stack size for the asyn port driver thread if
                         ASYN_CANBLOCK is set in asynFlags.
 */
-dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int maxSizeX,
-                     int maxSizeY, NDDataType_t dataType, int maxBuffers,
+dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
+                     int nSamples, int maxBuffers,
                      size_t maxMemory, int priority, int stackSize)
     : ADDriver(portName, 1, NUM_SIM_DETECTOR_PARAMS, maxBuffers, maxMemory,
                0, 0, /* No interfaces beyond those set in ADDriver.cpp */
@@ -638,15 +642,14 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int maxSizeX,
     /* Set some default values for parameters */
     status =  setStringParam (ADManufacturer, "Simulated detector");
     status |= setStringParam (ADModel, "Basic simulator");
-    status |= setIntegerParam(ADMaxSizeX, maxSizeX);
-    status |= setIntegerParam(ADMaxSizeY, maxSizeY);
-    status |= setIntegerParam(ADSizeX, maxSizeX);
-    status |= setIntegerParam(ADSizeX, maxSizeX);
-    status |= setIntegerParam(ADSizeY, maxSizeY);
-    status |= setIntegerParam(NDArraySizeX, maxSizeX);
-    status |= setIntegerParam(NDArraySizeY, maxSizeY);
+    status |= setIntegerParam(ADMaxSizeX, nChannels);
+    status |= setIntegerParam(ADMaxSizeY, nSamples);
+    status |= setIntegerParam(ADSizeX, nChannels);
+    status |= setIntegerParam(ADSizeY, nSamples);
+    status |= setIntegerParam(NDArraySizeX, nChannels);
+    status |= setIntegerParam(NDArraySizeY, nSamples);
     status |= setIntegerParam(NDArraySize, 0);
-    status |= setIntegerParam(NDDataType, dataType);
+    status |= setIntegerParam(NDDataType, NDFloat64);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
     status |= setDoubleParam (ADAcquireTime, .001);
     status |= setDoubleParam (ADAcquirePeriod, .005);
@@ -687,10 +690,10 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int maxSizeX,
     pasynOctetSyncIO->connect(ipPortName, 0, &this->pasynUserIP, NULL);
 }
 /* Configuration command, called directly or from iocsh */
-extern "C" int dtacq_adcConfig(const char *portName, char *ipPortName, int maxSizeX, int maxSizeY, int dataType,
+extern "C" int dtacq_adcConfig(const char *portName, char *ipPortName, int nChannels, int nSamples,
                                  int maxBuffers, int maxMemory, int priority, int stackSize)
 {
-    new dtacq_adc(portName, ipPortName, maxSizeX, maxSizeY, (NDDataType_t)dataType,
+    new dtacq_adc(portName, ipPortName, nChannels, nSamples,
                     (maxBuffers < 0) ? 0 : maxBuffers,
                     (maxMemory < 0) ? 0 : maxMemory,
                     priority, stackSize);
@@ -700,13 +703,12 @@ extern "C" int dtacq_adcConfig(const char *portName, char *ipPortName, int maxSi
 static const iocshArg dtacq_adcConfigArg0 = {"Port name", iocshArgString};
 static const iocshArg dtacq_adcConfigArg1 = {"IP Port asyn name",
                                              iocshArgString};
-static const iocshArg dtacq_adcConfigArg2 = {"Max X size", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg3 = {"Max Y size", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg4 = {"Data type", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg5 = {"maxBuffers", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg6 = {"maxMemory", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg7 = {"priority", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg8 = {"stackSize", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg2 = {"N Channels", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg3 = {"N Samples / frame", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg4 = {"maxBuffers", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg5 = {"maxMemory", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg6 = {"priority", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg7 = {"stackSize", iocshArgInt};
 static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg1,
                                                         &dtacq_adcConfigArg2,
@@ -714,15 +716,13 @@ static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg4,
                                                         &dtacq_adcConfigArg5,
                                                         &dtacq_adcConfigArg6,
-                                                        &dtacq_adcConfigArg7,
-                                                        &dtacq_adcConfigArg8};
-static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 9,
+                                                        &dtacq_adcConfigArg7};
+static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 8,
                                              dtacq_adcConfigArgs};
 static void configdtacq_adcCallFunc(const iocshArgBuf *args)
 {
     dtacq_adcConfig(args[0].sval, args[1].sval, args[2].ival, args[3].ival,
-                    args[4].ival, args[5].ival, args[6].ival, args[7].ival,
-                    args[8].ival);
+                    args[4].ival, args[5].ival, args[6].ival, args[7].ival);
 }
 
 static void dtacq_adcRegister(void)
