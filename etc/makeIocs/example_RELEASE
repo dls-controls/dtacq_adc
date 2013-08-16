@@ -1,2 +1,3 @@
 # Place any example specific dependencies here
-ADUTIL=$(WORK)/adUtil
+ADUTIL=$(LOCAL)/adUtil
+USERIO=$(WORK)/userIO

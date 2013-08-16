@@ -34,8 +34,12 @@
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.DSig.Roi" P="TESTDTACQADC" PORT="XBPM.DSig.Stat" R=":DSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.Roi" P="TESTDTACQADC" PORT="XBPM.XSig.Stat" R=":XSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.Roi" P="TESTDTACQADC" PORT="XBPM.YSig.Stat" R=":YSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
-	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.Roi" P="TESTDTACQADC" PORT="XBPM.ISig.Stat" R=":ZSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
+	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.Roi" P="TESTDTACQADC" PORT="XBPM.ISig.Stat" R=":ISIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
+	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.XSig.StatFFT" R=":XSIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
+	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.YSig.StatFFT" R=":YSIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
+	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.ISig.StatFFT" R=":ISIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<EPICS_BASE.EpicsEnvSet key="EPICS_CA_MAX_ARRAY_BYTES" value="6000000"/>
+	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ADC:CTRL:BinY&quot;, 10)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:EnableX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:SizeX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:MinX&quot;, 0)" post_init="True"/>
@@ -66,4 +70,11 @@
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:EnableY&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:SizeY&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:MinY&quot;, 2)" post_init="True"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:ASIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":ASIG:Average" SCAN="Passive" name="XBPM.AverageA"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:BSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":BSIG:Average" SCAN="Passive" name="XBPM.AverageB"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:CSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":CSIG:Average" SCAN="Passive" name="XBPM.AverageC"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:DSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":DSIG:Average" SCAN="Passive" name="XBPM.AverageD"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:XSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":XSIG:Average" SCAN="Passive" name="XBPM.AverageX"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:YSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":YSIG:Average" SCAN="Passive" name="XBPM.AverageY"/>
+	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:ISIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":ISIG:Average" SCAN="Passive" name="XBPM.AverageI"/>
 </components>
