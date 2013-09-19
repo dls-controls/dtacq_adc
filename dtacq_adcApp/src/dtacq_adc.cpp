@@ -49,6 +49,7 @@ protected:
     int SimGainX;
     #define FIRST_SIM_DETECTOR_PARAM SimGainX
     int SimGainY;
+    int dtacq_adcInvert;
     int SimGainRed;
     int SimGainGreen;
     int SimGainBlue;
@@ -156,7 +157,7 @@ int dtacq_adc::computeImage()
     int status = asynSuccess;
     NDDataType_t dataType;
     int itemp;
-    int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY;
+    int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY, invert;
     int xDim=0, yDim=1, colorDim=-1;
     int resetImage;
     int maxSizeX, maxSizeY;
@@ -180,6 +181,7 @@ int dtacq_adc::computeImage()
     status |= getIntegerParam(ADMaxSizeY,     &maxSizeY);
     status |= getIntegerParam(NDColorMode,    &colorMode);
     status |= getIntegerParam(NDDataType,     &itemp);
+    status |= getIntegerParam(dtacq_adcInvert,     &invert);
     dataType = (NDDataType_t)itemp;
     status |= getIntegerParam(SimResetImage,  &resetImage);
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -266,6 +268,9 @@ int dtacq_adc::computeImage()
     /* Multiply by a scale factor to convert -32767..32768 into -10V..10V
      * Also divide by the binning factor so we get a sensible scale for averaging */
     double mult = 10.0 / 32768 / binX / binY;
+    if (invert) {
+        mult *= -1;
+    }
     double * pData = (double *) pImage->pData;
     for (unsigned int i=0; i<arrayInfo.nElements; i++) {
     	pData[i] *= mult;
@@ -639,6 +644,7 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
     createParam(SimPeakWidthYString, asynParamInt32, &SimPeakWidthY);
     createParam(SimPeakHeightVariationString, asynParamInt32,
                 &SimPeakHeightVariation);
+    createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
     /* Set some default values for parameters */
     status =  setStringParam (ADManufacturer, "Simulated detector");
     status |= setStringParam (ADModel, "Basic simulator");

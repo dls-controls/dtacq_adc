@@ -8,6 +8,7 @@
 #% macro, PORT, Asyn Port name
 #% macro, TIMEOUT, Timeout
 #% macro, ADDR, Asyn Port address
+# % macro, INVERT, If 1 then multiply output signals by -1
 
 # This associates the template with an edm screen
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
@@ -311,3 +312,29 @@ record(longin, "$(P)$(R)PeakVariation_RBV")
    field(SCAN, "I/O Intr")
 }
 
+###################################################################
+#  These records control whether to invert input signal (+ve/-ve)   #
+###################################################################
+# % autosave 2 
+record(mbbo, "$(P)$(R)INVERT")
+{
+   field(DTYP, "asynInt32")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))INVERT")
+   field(VAL, "$(INVERT=0)")
+   field(ZRST, "No")
+   field(ZRVL, "0")
+   field(ONST, "Yes")
+   field(ONVL, "1")
+   field(PINI, "YES")   
+}
+
+record(mbbi, "$(P)$(R)INVERT_RBV")
+{
+   field(DTYP, "asynInt32")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))INVERT")
+   field(SCAN, "I/O Intr")
+   field(ZRST, "No")
+   field(ZRVL, "0")
+   field(ONST, "Yes")
+   field(ONVL, "1")
+}
