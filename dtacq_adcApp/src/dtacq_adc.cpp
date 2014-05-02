@@ -111,10 +111,10 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
     int status = asynSuccess;
     size_t nread = 0;
     int eomReason, total_read = 0;
-    while (total_read < n_samples * n_channels) {
+    while (total_read < n_samples * n_channels * 2) {
         status = pasynOctetSyncIO->read(pasynUserIP,
                                         (char *) this->pRaw->pData+total_read,
-                                        n_samples*n_channels*2 - nread, 5.0, &nread,
+                                        n_samples*n_channels*2 - total_read, 5.0, &nread,
                                         &eomReason);
         total_read += nread;
     }
