@@ -24,14 +24,14 @@
 static const char *driverName = "dtacq_adc";
 class dtacq_adc : public ADDriver {
 public:
-    dtacq_adc(const char *portName, char *ipPortName, int nChannels,
-              int nSamples, int maxBuffers,
-              size_t maxMemory, int priority, int stackSize);
+    dtacq_adc(const char *portName, const char *dataPortName,
+              const char *controlPortName, int nChannels, int nSamples,
+              int maxBuffers, size_t maxMemory, int priority, int stackSize);
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
     virtual void report(FILE *fp, int details);
-    void simTask();
+    void dtacqTask();
     int dtacq_adcInvert;
 
 private:
@@ -195,16 +195,16 @@ int dtacq_adc::computeImage()
     return(status);
 }
 
-static void simTaskC(void *drvPvt)
+static void dtacqTaskC(void *drvPvt)
 {
     dtacq_adc *pPvt = (dtacq_adc *)drvPvt;
-    pPvt->simTask();
+    pPvt->dtacqTask();
 }
 
 /* This thread calls computeImage to compute new image data and does the
    callbacks to send it to higher layers. It implements the logic for single,
    multiple or continuous acquisition. */
-void dtacq_adc::simTask()
+void dtacq_adc::dtacqTask()
 {
     int status = asynSuccess;
     int imageCounter;
@@ -216,7 +216,7 @@ void dtacq_adc::simTask()
     double acquireTime, acquirePeriod, delay;
     epicsTimeStamp startTime, endTime;
     double elapsedTime;
-    const char *functionName = "simTask";
+    const char *functionName = "dtacqTask";
     this->lock();
     /* Loop forever */
     while (1) {
@@ -453,7 +453,7 @@ asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 void dtacq_adc::report(FILE *fp, int details)
 {
 
-    fprintf(fp, "Simulation detector %s\n", this->portName);
+    fprintf(fp, "D-Tacq ACQ420FMC ADC %s\n", this->portName);
     if (details > 0) {
         int nx, ny, dataType;
         getIntegerParam(ADSizeX, &nx);
@@ -489,9 +489,10 @@ void dtacq_adc::report(FILE *fp, int details)
    \param[in] stackSize The stack size for the asyn port driver thread if
                         ASYN_CANBLOCK is set in asynFlags.
 */
-dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
-                    int nSamples, int maxBuffers,
-                    size_t maxMemory, int priority, int stackSize)
+dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
+                     const char *controlPortName, int nChannels, int nSamples,
+                     int maxBuffers, size_t maxMemory, int priority,
+                     int stackSize)
     : ADDriver(portName, 1, 1, maxBuffers, maxMemory, 0, 0, 0, 1, priority,
                stackSize), pRaw(NULL)
 {
@@ -513,8 +514,8 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
     }
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
     /* Set some default values for parameters */
-    status =  setStringParam (ADManufacturer, "Simulated detector");
-    status |= setStringParam (ADModel, "Basic simulator");
+    status =  setStringParam (ADManufacturer, "D-TACQ Solutions Ltd");
+    status |= setStringParam (ADModel, "ACQ420FMC");
     status |= setIntegerParam(ADMaxSizeX, nChannels);
     status |= setIntegerParam(ADMaxSizeY, nSamples);
     status |= setIntegerParam(ADSizeX, nChannels);
@@ -522,7 +523,7 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
     status |= setIntegerParam(NDArraySizeX, nChannels);
     status |= setIntegerParam(NDArraySizeY, nSamples);
     status |= setIntegerParam(NDArraySize, 0);
-    status |= setIntegerParam(NDDataType, NDFloat64);
+    status |= setIntegerParam(NDDataType, NDInt16);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
     status |= setDoubleParam (ADAcquireTime, .001);
     status |= setDoubleParam (ADAcquirePeriod, .005);
@@ -532,10 +533,10 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
         return;
     }
     /* Create the thread that updates the images */
-    status = (epicsThreadCreate("SimDetTask",
+    status = (epicsThreadCreate("D-TACQTask",
                                 epicsThreadPriorityMedium,
                                 epicsThreadGetStackSize(epicsThreadStackMedium),
-                                (EPICSTHREADFUNC)simTaskC,
+                                (EPICSTHREADFUNC)dtacqTaskC,
                                 this) == NULL);
     if (status) {
         printf("%s:%s epicsThreadCreate failure for image task\n",
@@ -543,28 +544,33 @@ dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
         return;
     }
     /* Connect to the ip port */
-    pasynOctetSyncIO->connect(ipPortName, 0, &this->pasynUserIP, NULL);
+    pasynOctetSyncIO->connect(dataPortName, 0, &this->pasynUserIP, NULL);
 }
 /* Configuration command, called directly or from iocsh */
-extern "C" int dtacq_adcConfig(const char *portName, char *ipPortName, int nChannels, int nSamples,
-                                 int maxBuffers, int maxMemory, int priority, int stackSize)
+extern "C" int dtacq_adcConfig(const char *portName, const char *dataPortName,
+                               const char *controlPortName, int nChannels,
+                               int nSamples, int maxBuffers, int maxMemory,
+                               int priority, int stackSize)
 {
-    new dtacq_adc(portName, ipPortName, nChannels, nSamples,
-                    (maxBuffers < 0) ? 0 : maxBuffers,
-                    (maxMemory < 0) ? 0 : maxMemory,
-                    priority, stackSize);
+    new dtacq_adc(portName, dataPortName, controlPortName, nChannels, nSamples,
+                  (maxBuffers < 0) ? 0 : maxBuffers,
+                  (maxMemory < 0) ? 0 : maxMemory,
+                  priority, stackSize);
     return(asynSuccess);
 }
 /* Code for iocsh registration */
 static const iocshArg dtacq_adcConfigArg0 = {"Port name", iocshArgString};
-static const iocshArg dtacq_adcConfigArg1 = {"IP Port asyn name",
+static const iocshArg dtacq_adcConfigArg1 = {"Data IP Port asyn name",
                                              iocshArgString};
-static const iocshArg dtacq_adcConfigArg2 = {"N Channels", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg3 = {"N Samples / frame", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg4 = {"maxBuffers", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg5 = {"maxMemory", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg6 = {"priority", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg7 = {"stackSize", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg2 = {"Control IP Port asyn name",
+                                             iocshArgString};
+static const iocshArg dtacq_adcConfigArg3 = {"N Channels", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg4 = {"N Samples / frame", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg5 = {"maxBuffers", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg6 = {"maxMemory", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg7 = {"priority", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg8 = {"stackSize", iocshArgInt};
+
 static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg1,
                                                         &dtacq_adcConfigArg2,
@@ -572,13 +578,15 @@ static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg4,
                                                         &dtacq_adcConfigArg5,
                                                         &dtacq_adcConfigArg6,
-                                                        &dtacq_adcConfigArg7};
-static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 8,
+                                                        &dtacq_adcConfigArg7,
+                                                        &dtacq_adcConfigArg8};
+static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 9,
                                              dtacq_adcConfigArgs};
 static void configdtacq_adcCallFunc(const iocshArgBuf *args)
 {
-    dtacq_adcConfig(args[0].sval, args[1].sval, args[2].ival, args[3].ival,
-                    args[4].ival, args[5].ival, args[6].ival, args[7].ival);
+    dtacq_adcConfig(args[0].sval, args[1].sval, args[2].sval, args[3].ival,
+                    args[4].ival, args[5].ival, args[6].ival, args[7].ival,
+                    args[8].ival);
 }
 
 static void dtacq_adcRegister(void)
