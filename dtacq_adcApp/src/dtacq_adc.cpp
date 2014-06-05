@@ -33,6 +33,8 @@ public:
     virtual void report(FILE *fp, int details);
     void dtacqTask();
     int dtacq_adcInvert;
+#define DTACQ_FIRST_PARAMETER dtacq_adcInvert
+#define DTACQ_NUM_PARAMETERS ((int) (&DTACQ_FIRST_PARAMETER + 1))
 
 private:
     /* These are the methods that are new to this class */
@@ -41,7 +43,8 @@ private:
     epicsEvent *acquireStartEvent;
     epicsEvent *acquireStopEvent;
     NDArray *pRaw;
-    asynUser *pasynUserIP;
+    asynUser *dataIPPort;
+    asynUser *controlIPPort;
 };
 
 int dtacq_adc::readArray(int n_samples, int n_channels)
@@ -50,7 +53,7 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
     size_t nread = 0;
     int eomReason, total_read = 0;
     while (total_read < n_samples * n_channels * 2) {
-        status = pasynOctetSyncIO->read(pasynUserIP,
+        status = pasynOctetSyncIO->read(dataIPPort,
                                         (char *) this->pRaw->pData+total_read,
                                         n_samples*n_channels*2 - total_read,
                                         5.0, &nread, &eomReason);
@@ -398,7 +401,8 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
     } else {
         /* If this parameter belongs to a base class call its method */
-        status = ADDriver::writeInt32(pasynUser, value);
+        if (function < DTACQ_FIRST_PARAMETER)
+            status = ADDriver::writeInt32(pasynUser, value);
     }
     /* Do callbacks so higher layers see any changes */
     callParamCallbacks();
@@ -427,7 +431,8 @@ asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
      * status at the end, but that's OK */
     status = setDoubleParam(function, value);
     /* If this parameter belongs to a base class call its method */
-    status = ADDriver::writeFloat64(pasynUser, value);
+    if (function < DTACQ_FIRST_PARAMETER)
+        status = ADDriver::writeFloat64(pasynUser, value);
     /* Do callbacks so higher layers see any changes */
     callParamCallbacks();
     if (status)
@@ -490,8 +495,8 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
                      const char *controlPortName, int nChannels, int nSamples,
                      int maxBuffers, size_t maxMemory, int priority,
                      int stackSize)
-    : ADDriver(portName, 1, 1, maxBuffers, maxMemory, 0, 0, 0, 1, priority,
-               stackSize), pRaw(NULL)
+    : ADDriver(portName, 1, DTACQ_NUM_PARAMETERS, maxBuffers, maxMemory, 0, 0,
+               0, 1, priority, stackSize), pRaw(NULL)
 {
     int status = asynSuccess;
     const char *functionName = "dtacq_adc";
@@ -531,7 +536,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
         return;
     }
     /* Connect to the ip port */
-    pasynOctetSyncIO->connect(dataPortName, 0, &this->pasynUserIP, NULL);
+    pasynOctetSyncIO->connect(dataPortName, 0, &this->dataIPPort, NULL);
 }
 /* Configuration command, called directly or from iocsh */
 extern "C" int dtacq_adcConfig(const char *portName, const char *dataPortName,
