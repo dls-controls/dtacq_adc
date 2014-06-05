@@ -34,7 +34,7 @@ public:
     void dtacqTask();
     int dtacq_adcInvert;
 #define DTACQ_FIRST_PARAMETER dtacq_adcInvert
-#define DTACQ_NUM_PARAMETERS ((int) (&DTACQ_FIRST_PARAMETER + 1))
+#define DTACQ_NUM_PARAMETERS 1
 
 private:
     /* These are the methods that are new to this class */
@@ -537,6 +537,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     }
     /* Connect to the ip port */
     pasynOctetSyncIO->connect(dataPortName, 0, &this->dataIPPort, NULL);
+    pasynOctetSyncIO->connect(controlPortName, 1, &this->controlIPPort, NULL);
 }
 /* Configuration command, called directly or from iocsh */
 extern "C" int dtacq_adcConfig(const char *portName, const char *dataPortName,
