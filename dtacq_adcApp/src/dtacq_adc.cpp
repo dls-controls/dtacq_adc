@@ -38,9 +38,8 @@ private:
     /* These are the methods that are new to this class */
     int readArray(int n_samples, int n_channels);
     int computeImage();
-    /* Our data */
-    epicsEventId startEventId;
-    epicsEventId stopEventId;
+    epicsEvent *acquireStartEvent;
+    epicsEvent *acquireStopEvent;
     NDArray *pRaw;
     asynUser *pasynUserIP;
 };
@@ -71,7 +70,7 @@ int dtacq_adc::computeImage()
     int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY, invert;
     int xDim=0, yDim=1, colorDim=-1;
-    int resetImage;
+    int resetImage=1;
     int maxSizeX, maxSizeY;
     int colorMode;
     int ndims=0;
@@ -216,6 +215,7 @@ void dtacq_adc::dtacqTask()
     double acquireTime, acquirePeriod, delay;
     epicsTimeStamp startTime, endTime;
     double elapsedTime;
+    bool eventComplete = 0;
     const char *functionName = "dtacqTask";
     this->lock();
     /* Loop forever */
@@ -229,7 +229,7 @@ void dtacq_adc::dtacqTask()
                       "%s:%s: waiting for acquire to start\n",
                       driverName, functionName);
             this->unlock();
-            status = epicsEventWait(this->startEventId);
+            acquireStartEvent->wait();
             this->lock();
             acquire = 1;
             setStringParam(ADStatusMessage, "Acquiring data");
@@ -246,17 +246,14 @@ void dtacq_adc::dtacqTask()
         setIntegerParam(ADStatus, ADStatusAcquire);
         /* Call the callbacks to update any changes */
         callParamCallbacks();
-        /* Simulate being busy during the exposure time. Use
-           epicsEventWaitWithTimeout so that manually stopping the
-           acquisition will work */
         if (acquireTime > 0.0) {
             this->unlock();
-            status = epicsEventWaitWithTimeout(this->stopEventId, acquireTime);
+            eventComplete = acquireStopEvent->wait(acquireTime);
             this->lock();
         } else {
-            status = epicsEventTryWait(this->stopEventId);
+            eventComplete = acquireStopEvent->tryWait();
         }
-        if (status == epicsEventWaitOK) {
+        if (eventComplete) {
             acquire = 0;
             if (imageMode == ADImageContinuous) {
                 setIntegerParam(ADStatus, ADStatusIdle);
@@ -336,9 +333,9 @@ void dtacq_adc::dtacqTask()
                 setIntegerParam(ADStatus, ADStatusWaiting);
                 callParamCallbacks();
                 this->unlock();
-                status = epicsEventWaitWithTimeout(this->stopEventId, delay);
+                eventComplete = acquireStopEvent->wait(delay);
                 this->lock();
-                if (status == epicsEventWaitOK) {
+                if (eventComplete) {
                     acquire = 0;
                     if (imageMode == ADImageContinuous) {
                         setIntegerParam(ADStatus, ADStatusIdle);
@@ -392,12 +389,12 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
         if (value && !acquiring) {
             /* Send an event to wake up the simulation task. It won't actually
                start generating new images until we release the lock below */
-            epicsEventSignal(this->startEventId);
+            acquireStartEvent->signal();
         }
         if (!value && acquiring) {
             /* This was a command to stop acquisition */
             /* Send the stop event */
-            epicsEventSignal(this->stopEventId);
+            acquireStopEvent->signal();
         }
     } else {
         /* If this parameter belongs to a base class call its method */
@@ -500,18 +497,8 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     const char *functionName = "dtacq_adc";
     /* Create the epicsEvents for signaling to the simulate task
        when acquisition starts and stops */
-    this->startEventId = epicsEventCreate(epicsEventEmpty);
-    if (!this->startEventId) {
-        printf("%s:%s epicsEventCreate failure for start event\n",
-            driverName, functionName);
-        return;
-    }
-    this->stopEventId = epicsEventCreate(epicsEventEmpty);
-    if (!this->stopEventId) {
-        printf("%s:%s epicsEventCreate failure for stop event\n",
-            driverName, functionName);
-        return;
-    }
+    acquireStartEvent = new epicsEvent();
+    acquireStopEvent = new epicsEvent();
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
     /* Set some default values for parameters */
     status =  setStringParam (ADManufacturer, "D-TACQ Solutions Ltd");
