@@ -523,7 +523,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setIntegerParam(NDArraySizeX, nChannels);
     status |= setIntegerParam(NDArraySizeY, nSamples);
     status |= setIntegerParam(NDArraySize, 0);
-    status |= setIntegerParam(NDDataType, NDInt16);
+    status |= setIntegerParam(NDDataType, NDFloat64);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
     status |= setDoubleParam (ADAcquireTime, .001);
     status |= setDoubleParam (ADAcquirePeriod, .005);
