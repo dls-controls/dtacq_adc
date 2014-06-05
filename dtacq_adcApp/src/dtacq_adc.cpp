@@ -34,7 +34,8 @@ public:
     void dtacqTask();
     int dtacq_adcInvert;
 #define DTACQ_FIRST_PARAMETER dtacq_adcInvert
-#define DTACQ_NUM_PARAMETERS 1
+    int carrierSite;
+#define DTACQ_NUM_PARAMETERS ((int) (&carrierSite - &DTACQ_FIRST_PARAMETER + 1))
 
 private:
     /* These are the methods that are new to this class */
@@ -364,6 +365,10 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int adstatus;
     int acquiring;
     int imageMode;
+    int commandLen;
+    int site;
+    size_t nbytesTransferred;
+    char command[9];
     asynStatus status = asynSuccess;
     /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
     getIntegerParam(ADStatus, &adstatus);
@@ -390,8 +395,10 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     /* For a real detector this is where the parameter is sent to the hardware */
     if (function == ADAcquire) {
         if (value && !acquiring) {
-            /* Send an event to wake up the simulation task. It won't actually
-               start generating new images until we release the lock below */
+            getIntegerParam(carrierSite, &site);
+            commandLen = sprintf(command, "run0 %d\n", site);
+            pasynOctetSyncIO->write(controlIPPort, command, commandLen, 2,
+                                    &nbytesTransferred);
             acquireStartEvent->signal();
         }
         if (!value && acquiring) {
@@ -505,6 +512,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     acquireStartEvent = new epicsEvent();
     acquireStopEvent = new epicsEvent();
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
+    createParam("CARRIER_SITE", asynParamInt32, &carrierSite);
     /* Set some default values for parameters */
     status =  setStringParam (ADManufacturer, "D-TACQ Solutions Ltd");
     status |= setStringParam (ADModel, "ACQ420FMC");
