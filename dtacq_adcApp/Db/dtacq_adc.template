@@ -1,7 +1,3 @@
-# Database for the records specific to the simulated detector driver
-# Mark Rivers
-# March 23, 2008
-
 # Macros:
 #% macro, P, Device Prefix
 #% macro, R, Device Suffix
@@ -9,6 +5,7 @@
 #% macro, TIMEOUT, Timeout
 #% macro, ADDR, Asyn Port address
 # % macro, INVERT, If 1 then multiply output signals by -1
+#% macro, CARRIER_SITE, The location of the card in the carrier
 
 # This associates the template with an edm screen
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
@@ -41,4 +38,19 @@ record(mbbi, "$(P)$(R)INVERT_RBV")
    field(ZRVL, "0")
    field(ONST, "Yes")
    field(ONVL, "1")
+}
+
+record(ao, "$(P)$(R)CARRIER_SITE")
+{
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CARRIER_SITE")
+    field(VAL, "$(CARRIER_SITE=1)")
+    field(PINI, "YES")
+}
+
+record(ai, "$(P)$(R)CARRIER_SITE_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CARRIER_SITE")
+    field(SCAN, "I/O Intr")
 }
