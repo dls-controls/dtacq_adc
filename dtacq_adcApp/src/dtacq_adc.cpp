@@ -1,3 +1,14 @@
+/* dtacq_adc.cpp
+ *
+ * This is a driver for a simulated area detector.
+ *
+ * Author: Mark Rivers
+ *         University of Chicago
+ *
+ * Created:  March 20, 2008
+ *
+ */
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -24,29 +35,76 @@
 static const char *driverName = "dtacq_adc";
 class dtacq_adc : public ADDriver {
 public:
-    dtacq_adc(const char *portName, const char *dataPortName,
-              const char *controlPortName, int nChannels, int nSamples,
-              int maxBuffers, size_t maxMemory, int priority, int stackSize);
+    dtacq_adc(const char *portName, char *ipPortName, int nChannels,
+              int nSamples, int maxBuffers,
+              size_t maxMemory, int priority, int stackSize);
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
+    virtual void setShutter(int open);
     virtual void report(FILE *fp, int details);
-    void dtacqTask();
+    void simTask();
+
+protected:
+    int SimGainX;
+    #define FIRST_SIM_DETECTOR_PARAM SimGainX
+    int SimGainY;
     int dtacq_adcInvert;
-#define DTACQ_FIRST_PARAMETER dtacq_adcInvert
-    int carrierSite;
-#define DTACQ_NUM_PARAMETERS ((int) (&carrierSite - &DTACQ_FIRST_PARAMETER + 1))
+    int SimGainRed;
+    int SimGainGreen;
+    int SimGainBlue;
+    int SimNoise;
+    int SimResetImage;
+    int SimMode;
+    int SimPeakStartX;
+    int SimPeakStartY;
+    int SimPeakWidthX;
+    int SimPeakWidthY;
+    int SimPeakNumX;
+    int SimPeakNumY;
+    int SimPeakStepX;
+    int SimPeakStepY;
+    int SimPeakHeightVariation;
+    #define LAST_SIM_DETECTOR_PARAM SimPeakHeightVariation
 
 private:
     /* These are the methods that are new to this class */
+    /*template <typename epicsType> int computeArray(int sizeX, int sizeY);
+    template <typename epicsType> int computeLinearRampArray(int sizeX, int sizeY);
+    template <typename epicsType> int computePeaksArray(int sizeX, int sizeY);*/
+    int computeArray(int n_samples, int n_channels);
     int readArray(int n_samples, int n_channels);
     int computeImage();
-    epicsEvent *acquireStartEvent;
-    epicsEvent *acquireStopEvent;
+    /* Our data */
+    epicsEventId startEventId;
+    epicsEventId stopEventId;
     NDArray *pRaw;
-    asynUser *dataIPPort;
-    asynUser *controlIPPort;
+    asynUser *pasynUserIP;
 };
+
+typedef enum {
+    SimModeLinearRamp,
+    SimModePeaks,
+}SimModes_t;
+
+#define SimGainXString          "SIM_GAIN_X"
+#define SimGainYString          "SIM_GAIN_Y"
+#define SimGainRedString        "SIM_GAIN_RED"
+#define SimGainGreenString      "SIM_GAIN_GREEN"
+#define SimGainBlueString       "SIM_GAIN_BLUE"
+#define SimNoiseString          "SIM_NOISE"
+#define SimResetImageString     "RESET_IMAGE"
+#define SimModeString           "SIM_MODE"
+#define SimPeakStartXString     "SIM_PEAK_START_X"
+#define SimPeakStartYString     "SIM_PEAK_START_Y"
+#define SimPeakWidthXString     "SIM_PEAK_WIDTH_X"
+#define SimPeakWidthYString     "SIM_PEAK_WIDTH_Y"
+#define SimPeakNumXString       "SIM_PEAK_NUM_X"
+#define SimPeakNumYString       "SIM_PEAK_NUM_Y"
+#define SimPeakStepXString      "SIM_PEAK_STEP_X"
+#define SimPeakStepYString      "SIM_PEAK_STEP_Y"
+#define SimPeakHeightVariationString  "SIM_PEAK_HEIGHT_VARIATION"
+#define NUM_SIM_DETECTOR_PARAMS ((int)(&LAST_SIM_DETECTOR_PARAM - &FIRST_SIM_DETECTOR_PARAM + 1))
 
 int dtacq_adc::readArray(int n_samples, int n_channels)
 {
@@ -54,16 +112,43 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
     size_t nread = 0;
     int eomReason, total_read = 0;
     while (total_read < n_samples * n_channels * 2) {
-        status = pasynOctetSyncIO->read(dataIPPort,
+        status = pasynOctetSyncIO->read(pasynUserIP,
                                         (char *) this->pRaw->pData+total_read,
-                                        n_samples*n_channels*2 - total_read,
-                                        5.0, &nread, &eomReason);
+                                        n_samples*n_channels*2 - total_read, 5.0, &nread,
+                                        &eomReason);
         total_read += nread;
     }
     if (status != asynSuccess) {
         printf("N read: %u %d %d\n", nread, eomReason, status);
     }
     return status;
+}
+
+int dtacq_adc::computeArray(int n_samples, int n_channels)
+{
+    int i, j;
+    char * pData = (char *) this->pRaw->pData;
+    for (i=0; i<n_channels; i++) {
+        for (j=0; j<n_samples; j++) {
+          (*pData++) = (char) char(127*sin(0.01*j) + 128);
+        }
+    }
+    return 1;
+}
+
+/* Controls the shutter */
+void dtacq_adc::setShutter(int open)
+{
+    int shutterMode;
+
+    getIntegerParam(ADShutterMode, &shutterMode);
+    if (shutterMode == ADShutterModeDetector) {
+        /* Simulate a shutter by just changing the status readback */
+        setIntegerParam(ADShutterStatus, open);
+    } else {
+        /* For no shutter or EPICS shutter call the base class method */
+        ADDriver::setShutter(open);
+    }
 }
 
 /* Computes the new image data */
@@ -74,7 +159,7 @@ int dtacq_adc::computeImage()
     int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY, invert;
     int xDim=0, yDim=1, colorDim=-1;
-    int resetImage=1;
+    int resetImage;
     int maxSizeX, maxSizeY;
     int colorMode;
     int ndims=0;
@@ -98,6 +183,7 @@ int dtacq_adc::computeImage()
     status |= getIntegerParam(NDDataType,     &itemp);
     status |= getIntegerParam(dtacq_adcInvert,     &invert);
     dataType = (NDDataType_t)itemp;
+    status |= getIntegerParam(SimResetImage,  &resetImage);
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                           "%s:%s: error getting parameters\n",
                           driverName, functionName);
@@ -118,20 +204,20 @@ int dtacq_adc::computeImage()
         minY = 0;
         status |= setIntegerParam(ADMinY, minY);
     }
-    if (minX > maxSizeX - 1) {
-        minX = maxSizeX - 1;
+    if (minX > maxSizeX-1) {
+        minX = maxSizeX-1;
         status |= setIntegerParam(ADMinX, minX);
     }
-    if (minY > maxSizeY - 1) {
-        minY = maxSizeY - 1;
+    if (minY > maxSizeY-1) {
+        minY = maxSizeY-1;
         status |= setIntegerParam(ADMinY, minY);
     }
     if (minX+sizeX > maxSizeX) {
-        sizeX = maxSizeX - minX;
+        sizeX = maxSizeX-minX;
         status |= setIntegerParam(ADSizeX, sizeX);
     }
     if (minY+sizeY > maxSizeY) {
-        sizeY = maxSizeY - minY;
+        sizeY = maxSizeY-minY;
         status |= setIntegerParam(ADSizeY, sizeY);
     }
     ndims = 2;
@@ -167,12 +253,14 @@ int dtacq_adc::computeImage()
     /* We save the most recent image buffer so it can be used in the
        read() function. Now release it before getting a new version. */
     if (this->pArrays[0]) this->pArrays[0]->release();
-    status = this->pNDArrayPool->convert(this->pRaw, &this->pArrays[0],
-                                         dataType, dimsOut);
+    status = this->pNDArrayPool->convert(this->pRaw,
+                                         &this->pArrays[0],
+                                         dataType,
+                                         dimsOut);
     if (status) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                  "%s:%s: error allocating buffer in convert()\n",
-                  driverName, functionName);
+                    "%s:%s: error allocating buffer in convert()\n",
+                    driverName, functionName);
         return(status);
     }
     pImage = this->pArrays[0];
@@ -192,22 +280,23 @@ int dtacq_adc::computeImage()
     status |= setIntegerParam(NDArraySize,  (int)arrayInfo.totalBytes);
     status |= setIntegerParam(NDArraySizeX, (int)pImage->dims[xDim].size);
     status |= setIntegerParam(NDArraySizeY, (int)pImage->dims[yDim].size);
+    status |= setIntegerParam(SimResetImage, 0);
     if (status) asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                           "%s:%s: error setting parameters\n",
                           driverName, functionName);
     return(status);
 }
 
-static void dtacqTaskC(void *drvPvt)
+static void simTaskC(void *drvPvt)
 {
     dtacq_adc *pPvt = (dtacq_adc *)drvPvt;
-    pPvt->dtacqTask();
+    pPvt->simTask();
 }
 
 /* This thread calls computeImage to compute new image data and does the
    callbacks to send it to higher layers. It implements the logic for single,
    multiple or continuous acquisition. */
-void dtacq_adc::dtacqTask()
+void dtacq_adc::simTask()
 {
     int status = asynSuccess;
     int imageCounter;
@@ -219,8 +308,7 @@ void dtacq_adc::dtacqTask()
     double acquireTime, acquirePeriod, delay;
     epicsTimeStamp startTime, endTime;
     double elapsedTime;
-    bool eventComplete = 0;
-    const char *functionName = "dtacqTask";
+    const char *functionName = "simTask";
     this->lock();
     /* Loop forever */
     while (1) {
@@ -233,7 +321,7 @@ void dtacq_adc::dtacqTask()
                       "%s:%s: waiting for acquire to start\n",
                       driverName, functionName);
             this->unlock();
-            acquireStartEvent->wait();
+            status = epicsEventWait(this->startEventId);
             this->lock();
             acquire = 1;
             setStringParam(ADStatusMessage, "Acquiring data");
@@ -248,16 +336,21 @@ void dtacq_adc::dtacqTask()
         getDoubleParam(ADAcquireTime, &acquireTime);
         getDoubleParam(ADAcquirePeriod, &acquirePeriod);
         setIntegerParam(ADStatus, ADStatusAcquire);
+        /* Open the shutter */
+        setShutter(ADShutterOpen);
         /* Call the callbacks to update any changes */
         callParamCallbacks();
+        /* Simulate being busy during the exposure time. Use
+           epicsEventWaitWithTimeout so that manually stopping the
+           acquisition will work */
         if (acquireTime > 0.0) {
             this->unlock();
-            eventComplete = acquireStopEvent->wait(acquireTime);
+            status = epicsEventWaitWithTimeout(this->stopEventId, acquireTime);
             this->lock();
         } else {
-            eventComplete = acquireStopEvent->tryWait();
+            status = epicsEventTryWait(this->stopEventId);
         }
-        if (eventComplete) {
+        if (status == epicsEventWaitOK) {
             acquire = 0;
             if (imageMode == ADImageContinuous) {
                 setIntegerParam(ADStatus, ADStatusIdle);
@@ -272,6 +365,10 @@ void dtacq_adc::dtacqTask()
         status = computeImage();
 
         if (status) continue;
+
+        /* Close the shutter */
+        setShutter(ADShutterClosed);
+
         if (!acquire) continue;
 
         setIntegerParam(ADStatus, ADStatusReadout);
@@ -319,8 +416,7 @@ void dtacq_adc::dtacqTask()
             acquire = 0;
             setIntegerParam(ADAcquire, acquire);
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
-                      "%s:%s: acquisition completed\n", driverName,
-                      functionName);
+                      "%s:%s: acquisition completed\n", driverName, functionName);
         }
         /* Call the callbacks to update any changes */
         callParamCallbacks();
@@ -337,9 +433,9 @@ void dtacq_adc::dtacqTask()
                 setIntegerParam(ADStatus, ADStatusWaiting);
                 callParamCallbacks();
                 this->unlock();
-                eventComplete = acquireStopEvent->wait(delay);
+                status = epicsEventWaitWithTimeout(this->stopEventId, delay);
                 this->lock();
-                if (eventComplete) {
+                if (status == epicsEventWaitOK) {
                     acquire = 0;
                     if (imageMode == ADImageContinuous) {
                         setIntegerParam(ADStatus, ADStatusIdle);
@@ -365,10 +461,6 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int adstatus;
     int acquiring;
     int imageMode;
-    int commandLen;
-    int site;
-    size_t nbytesTransferred;
-    char command[9];
     asynStatus status = asynSuccess;
     /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
     getIntegerParam(ADStatus, &adstatus);
@@ -395,21 +487,22 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     /* For a real detector this is where the parameter is sent to the hardware */
     if (function == ADAcquire) {
         if (value && !acquiring) {
-            getIntegerParam(carrierSite, &site);
-            commandLen = sprintf(command, "run0 %d\n", site);
-            pasynOctetSyncIO->write(controlIPPort, command, commandLen, 2,
-                                    &nbytesTransferred);
-            acquireStartEvent->signal();
+            /* Send an event to wake up the simulation task. It won't actually
+               start generating new images until we release the lock below */
+            epicsEventSignal(this->startEventId);
         }
         if (!value && acquiring) {
             /* This was a command to stop acquisition */
             /* Send the stop event */
-            acquireStopEvent->signal();
+            epicsEventSignal(this->stopEventId);
         }
+    } else if ((function == NDDataType) ||
+               (function == NDColorMode) ||
+               (function == SimMode)) {
+        status = setIntegerParam(SimResetImage, 1);
     } else {
         /* If this parameter belongs to a base class call its method */
-        if (function < DTACQ_FIRST_PARAMETER)
-            status = ADDriver::writeInt32(pasynUser, value);
+        if (function < FIRST_SIM_DETECTOR_PARAM) status = ADDriver::writeInt32(pasynUser, value);
     }
     /* Do callbacks so higher layers see any changes */
     callParamCallbacks();
@@ -437,9 +530,19 @@ asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
     status = setDoubleParam(function, value);
-    /* If this parameter belongs to a base class call its method */
-    if (function < DTACQ_FIRST_PARAMETER)
-        status = ADDriver::writeFloat64(pasynUser, value);
+    /* Changing any of the following parameters requires recomputing the base image */
+    if ((function == ADAcquireTime) ||
+        (function == ADGain) ||
+        (function == SimGainX) ||
+        (function == SimGainY) ||
+        (function == SimGainRed) ||
+        (function == SimGainGreen) ||
+        (function == SimGainBlue)) {
+            status = setIntegerParam(SimResetImage, 1);
+    } else {
+        /* If this parameter belongs to a base class call its method */
+        if (function < FIRST_SIM_DETECTOR_PARAM) status = ADDriver::writeFloat64(pasynUser, value);
+    }
     /* Do callbacks so higher layers see any changes */
     callParamCallbacks();
     if (status)
@@ -462,7 +565,7 @@ asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 void dtacq_adc::report(FILE *fp, int details)
 {
 
-    fprintf(fp, "D-Tacq ACQ420FMC ADC %s\n", this->portName);
+    fprintf(fp, "Simulation detector %s\n", this->portName);
     if (details > 0) {
         int nx, ny, dataType;
         getIntegerParam(ADSizeX, &nx);
@@ -477,7 +580,7 @@ void dtacq_adc::report(FILE *fp, int details)
 
 /* Constructor for dtacq_adc; most parameters are simply passed to
    ADDriver::ADDriver. After calling the base class constructor this method
-   creates a thread to read the detector data, and sets
+   creates a thread to compute the simulated detector data, and sets
    reasonable default values for parameters defined in this class,
    asynNDArrayDriver and ADDriver.
    \param[in] portName The name of the asyn port driver to be created.
@@ -498,24 +601,53 @@ void dtacq_adc::report(FILE *fp, int details)
    \param[in] stackSize The stack size for the asyn port driver thread if
                         ASYN_CANBLOCK is set in asynFlags.
 */
-dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
-                     const char *controlPortName, int nChannels, int nSamples,
-                     int maxBuffers, size_t maxMemory, int priority,
-                     int stackSize)
-    : ADDriver(portName, 1, DTACQ_NUM_PARAMETERS, maxBuffers, maxMemory, 0, 0,
-               0, 1, priority, stackSize), pRaw(NULL)
+dtacq_adc::dtacq_adc(const char *portName, char *ipPortName, int nChannels,
+                     int nSamples, int maxBuffers,
+                     size_t maxMemory, int priority, int stackSize)
+    : ADDriver(portName, 1, NUM_SIM_DETECTOR_PARAMS, maxBuffers, maxMemory,
+               0, 0, /* No interfaces beyond those set in ADDriver.cpp */
+               0, 1, /* ASYN_CANBLOCK=0, ASYN_MULTIDEVICE=0, autoConnect=1 */
+               priority, stackSize),
+      pRaw(NULL)
 {
     int status = asynSuccess;
     const char *functionName = "dtacq_adc";
     /* Create the epicsEvents for signaling to the simulate task
        when acquisition starts and stops */
-    acquireStartEvent = new epicsEvent();
-    acquireStopEvent = new epicsEvent();
+    this->startEventId = epicsEventCreate(epicsEventEmpty);
+    if (!this->startEventId) {
+        printf("%s:%s epicsEventCreate failure for start event\n",
+            driverName, functionName);
+        return;
+    }
+    this->stopEventId = epicsEventCreate(epicsEventEmpty);
+    if (!this->stopEventId) {
+        printf("%s:%s epicsEventCreate failure for stop event\n",
+            driverName, functionName);
+        return;
+    }
+    createParam(SimGainXString, asynParamFloat64, &SimGainX);
+    createParam(SimGainYString, asynParamFloat64, &SimGainY);
+    createParam(SimGainRedString, asynParamFloat64, &SimGainRed);
+    createParam(SimGainGreenString, asynParamFloat64, &SimGainGreen);
+    createParam(SimGainBlueString, asynParamFloat64, &SimGainBlue);
+    createParam(SimNoiseString, asynParamInt32, &SimNoise);
+    createParam(SimResetImageString, asynParamInt32, &SimResetImage);
+    createParam(SimModeString, asynParamInt32, &SimMode);
+    createParam(SimPeakNumXString, asynParamInt32, &SimPeakNumX);
+    createParam(SimPeakNumYString, asynParamInt32, &SimPeakNumY);
+    createParam(SimPeakStepXString, asynParamInt32, &SimPeakStepX);
+    createParam(SimPeakStepYString, asynParamInt32, &SimPeakStepY);
+    createParam(SimPeakStartXString, asynParamInt32, &SimPeakStartX);
+    createParam(SimPeakStartYString, asynParamInt32, &SimPeakStartY);
+    createParam(SimPeakWidthXString, asynParamInt32, &SimPeakWidthX);
+    createParam(SimPeakWidthYString, asynParamInt32, &SimPeakWidthY);
+    createParam(SimPeakHeightVariationString, asynParamInt32,
+                &SimPeakHeightVariation);
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
-    createParam("CARRIER_SITE", asynParamInt32, &carrierSite);
     /* Set some default values for parameters */
-    status =  setStringParam (ADManufacturer, "D-TACQ Solutions Ltd");
-    status |= setStringParam (ADModel, "ACQ420FMC");
+    status =  setStringParam (ADManufacturer, "Simulated detector");
+    status |= setStringParam (ADModel, "Basic simulator");
     status |= setIntegerParam(ADMaxSizeX, nChannels);
     status |= setIntegerParam(ADMaxSizeY, nSamples);
     status |= setIntegerParam(ADSizeX, nChannels);
@@ -528,15 +660,32 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setDoubleParam (ADAcquireTime, .001);
     status |= setDoubleParam (ADAcquirePeriod, .005);
     status |= setIntegerParam(ADNumImages, 100);
+    status |= setIntegerParam(SimNoise, 3);
+    status |= setIntegerParam(SimResetImage, 1);
+    status |= setDoubleParam (SimGainX, 1);
+    status |= setDoubleParam (SimGainY, 1);
+    status |= setDoubleParam (SimGainRed, 1);
+    status |= setDoubleParam (SimGainGreen, 1);
+    status |= setDoubleParam (SimGainBlue, 1);
+    status |= setIntegerParam(SimMode, 0);
+    status |= setIntegerParam(SimPeakStartX, 1);
+    status |= setIntegerParam(SimPeakStartY, 1);
+    status |= setIntegerParam(SimPeakWidthX, 10);
+    status |= setIntegerParam(SimPeakWidthY, 20);
+    status |= setIntegerParam(SimPeakNumX, 1);
+    status |= setIntegerParam(SimPeakNumY, 1);
+    status |= setIntegerParam(SimPeakStepX, 1);
+    status |= setIntegerParam(SimPeakStepY, 1);
+    status |= setIntegerParam(SimPeakHeightVariation, 3);
     if (status) {
         printf("%s: unable to set camera parameters\n", functionName);
         return;
     }
     /* Create the thread that updates the images */
-    status = (epicsThreadCreate("D-TACQTask",
+    status = (epicsThreadCreate("SimDetTask",
                                 epicsThreadPriorityMedium,
                                 epicsThreadGetStackSize(epicsThreadStackMedium),
-                                (EPICSTHREADFUNC)dtacqTaskC,
+                                (EPICSTHREADFUNC)simTaskC,
                                 this) == NULL);
     if (status) {
         printf("%s:%s epicsThreadCreate failure for image task\n",
@@ -544,34 +693,28 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
         return;
     }
     /* Connect to the ip port */
-    pasynOctetSyncIO->connect(dataPortName, 0, &this->dataIPPort, NULL);
-    pasynOctetSyncIO->connect(controlPortName, 1, &this->controlIPPort, NULL);
+    pasynOctetSyncIO->connect(ipPortName, 0, &this->pasynUserIP, NULL);
 }
 /* Configuration command, called directly or from iocsh */
-extern "C" int dtacq_adcConfig(const char *portName, const char *dataPortName,
-                               const char *controlPortName, int nChannels,
-                               int nSamples, int maxBuffers, int maxMemory,
-                               int priority, int stackSize)
+extern "C" int dtacq_adcConfig(const char *portName, char *ipPortName, int nChannels, int nSamples,
+                                 int maxBuffers, int maxMemory, int priority, int stackSize)
 {
-    new dtacq_adc(portName, dataPortName, controlPortName, nChannels, nSamples,
-                  (maxBuffers < 0) ? 0 : maxBuffers,
-                  (maxMemory < 0) ? 0 : maxMemory,
-                  priority, stackSize);
+    new dtacq_adc(portName, ipPortName, nChannels, nSamples,
+                    (maxBuffers < 0) ? 0 : maxBuffers,
+                    (maxMemory < 0) ? 0 : maxMemory,
+                    priority, stackSize);
     return(asynSuccess);
 }
 /* Code for iocsh registration */
 static const iocshArg dtacq_adcConfigArg0 = {"Port name", iocshArgString};
-static const iocshArg dtacq_adcConfigArg1 = {"Data IP Port asyn name",
+static const iocshArg dtacq_adcConfigArg1 = {"IP Port asyn name",
                                              iocshArgString};
-static const iocshArg dtacq_adcConfigArg2 = {"Control IP Port asyn name",
-                                             iocshArgString};
-static const iocshArg dtacq_adcConfigArg3 = {"N Channels", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg4 = {"N Samples / frame", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg5 = {"maxBuffers", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg6 = {"maxMemory", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg7 = {"priority", iocshArgInt};
-static const iocshArg dtacq_adcConfigArg8 = {"stackSize", iocshArgInt};
-
+static const iocshArg dtacq_adcConfigArg2 = {"N Channels", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg3 = {"N Samples / frame", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg4 = {"maxBuffers", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg5 = {"maxMemory", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg6 = {"priority", iocshArgInt};
+static const iocshArg dtacq_adcConfigArg7 = {"stackSize", iocshArgInt};
 static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg1,
                                                         &dtacq_adcConfigArg2,
@@ -579,15 +722,13 @@ static const iocshArg * const dtacq_adcConfigArgs[] =  {&dtacq_adcConfigArg0,
                                                         &dtacq_adcConfigArg4,
                                                         &dtacq_adcConfigArg5,
                                                         &dtacq_adcConfigArg6,
-                                                        &dtacq_adcConfigArg7,
-                                                        &dtacq_adcConfigArg8};
-static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 9,
+                                                        &dtacq_adcConfigArg7};
+static const iocshFuncDef configdtacq_adc = {"dtacq_adcConfig", 8,
                                              dtacq_adcConfigArgs};
 static void configdtacq_adcCallFunc(const iocshArgBuf *args)
 {
-    dtacq_adcConfig(args[0].sval, args[1].sval, args[2].sval, args[3].ival,
-                    args[4].ival, args[5].ival, args[6].ival, args[7].ival,
-                    args[8].ival);
+    dtacq_adcConfig(args[0].sval, args[1].sval, args[2].ival, args[3].ival,
+                    args[4].ival, args[5].ival, args[6].ival, args[7].ival);
 }
 
 static void dtacq_adcRegister(void)
