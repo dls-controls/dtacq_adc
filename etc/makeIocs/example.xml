@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <components arch="linux-x86">
-	<dtacq_adc.dtacq_adc ADDR="0" IP="172.23.253.29:4210" P="TESTDTACQADC" PORT="XBPM.ADC.Ctrl" R=":ADC:CTRL:" TIMEOUT="1"/>
+	<dtacq_adc.dtacq_adc ADDR="0" CONTROL_IP="acq1001_040:4220" DATA_IP="acq1001_040:4210" P="TESTDTACQADC" PORT="XBPM.ADC.Ctrl" R=":ADC:CTRL:" TIMEOUT="1"/>
 	<!--<areaDetector.NDAttributes attrname="CameraModel" datatype="STRING" description="Camera model" port="CAM1.CAM" source="MODEL" type="PARAM"/>-->
 	<areaDetector.NDAttributes attrname="RingCurrent" description="Machine Ring Current" port="XBPM.ADC.Ctrl" source="SR-DI-DCCT-01:SIGNAL"/>
 	<adUtil.BPM_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.ADC.BPMC" R=":ADC:BPMC:" TIMEOUT="1"/>
