@@ -4,14 +4,11 @@
 #% macro, PORT, Asyn Port name
 #% macro, TIMEOUT, Timeout
 #% macro, ADDR, Asyn Port address
-# % macro, INVERT, If 1 then multiply output signals by -1
+#% macro, INVERT, If 1 then multiply output signals by -1
 #% macro, CARRIER_SITE, The location of the card in the carrier
 
 # This associates the template with an edm screen
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
-
-# Redefine the color mode choices from ADBase.template to only have those that the simDetector
-# driver supports.  Keep the same values (xxVL), but change the menu numbers.
 
 ###################################################################
 #  These records control whether to invert input signal (+ve/-ve)   #
