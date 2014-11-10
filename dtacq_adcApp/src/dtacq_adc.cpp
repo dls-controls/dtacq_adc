@@ -67,16 +67,21 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
     size_t nread = 0;
-    int eomReason, enabled, connected, total_read = 0;
+    int eomReason, enabled, connected, dType, nBytes, total_read = 0;
     pasynManager->isConnected(this->commonDataIPPort, &connected);
     if (!connected) {
         return asynError;
     } else {
+        getIntegerParam(NDDataType, &dType);
+        if (dType == NDInt16)
+            nBytes = 2;
+        else
+            nBytes = 4;
 // *2 because normally acquiring 16bits but the carrier allows 32 bit.
-        while (total_read < n_samples * n_channels * 2) {
+        while (total_read < n_samples * n_channels * nBytes) {
             status = pasynOctetSyncIO->read(this->octetDataIPPort,
                                             (char *) this->pRaw->pData + total_read,
-                                            n_samples*n_channels*2 - total_read,
+                                            n_samples*n_channels*nBytes - total_read,
                                             5.0, &nread, &eomReason);
             if (nread == 0) {
                 printf(this->commonDataIPPort->errorMessage);
@@ -85,7 +90,7 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
             }
             total_read += nread;
             printf("Still in the loop %d %d %d %d\n", total_read, nread, eomReason,
-                   n_samples*n_channels*2 - total_read);
+                   n_samples*n_channels*nBytes - total_read);
         }
         printf("Got %d bytes\n", nread);
         if (status != asynSuccess) {
@@ -102,12 +107,12 @@ int dtacq_adc::computeImage()
     NDDataType_t dataType;
     int itemp;
     int binX, binY, minX, minY, sizeX, sizeY, reverseX, reverseY, invert;
-    int xDim=0, yDim=1, colorDim=-1;
+    int xDim=0, yDim=1;
     int resetImage=1;
     int maxSizeX, maxSizeY;
-    int ndims=0;
-    NDDimension_t dimsOut[3];
-    size_t dims[3];
+    const int ndims=2;
+    NDDimension_t dimsOut[ndims];
+    size_t dims[ndims];
     NDArrayInfo_t arrayInfo;
     NDArray *pImage;
     const char* functionName = "computeImage";
@@ -161,16 +166,15 @@ int dtacq_adc::computeImage()
         sizeY = maxSizeY - minY;
         status |= setIntegerParam(ADSizeY, sizeY);
     }
-    ndims = 2;
-    xDim = 0;
-    yDim = 1;
+    
     if (resetImage) {
     /* Free the previous raw buffer */
         if (this->pRaw) this->pRaw->release();
         /* Allocate the raw buffer we use to compute images. */
         dims[xDim] = maxSizeX;
         dims[yDim] = maxSizeY;
-        this->pRaw = this->pNDArrayPool->alloc(ndims, dims, NDInt16, 0, NULL);
+        this->pRaw = this->pNDArrayPool->alloc(
+            ndims, dims, dataType, 0, NULL);
         if (!this->pRaw) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                       "%s:%s: error allocating raw buffer\n",
@@ -189,7 +193,6 @@ int dtacq_adc::computeImage()
            convertImage detects that case and is very efficient */
         this->pRaw->initDimension(&dimsOut[xDim], sizeX);
         this->pRaw->initDimension(&dimsOut[yDim], sizeY);
-        if (ndims > 2) this->pRaw->initDimension(&dimsOut[colorDim], 3);
         dimsOut[xDim].binning = binX;
         dimsOut[xDim].offset  = minX;
         dimsOut[xDim].reverse = reverseX;
@@ -209,16 +212,6 @@ int dtacq_adc::computeImage()
         }
         pImage = this->pArrays[0];
         pImage->getInfo(&arrayInfo);
-        /* Multiply by a scale factor to convert -32767..32768 into -10V..10V
-         * Also divide by the binning factor so we get a sensible scale for averaging */
-        double mult = 10.0 / 32768 / binX / binY;
-        if (invert) {
-            mult *= -1;
-        }
-        double * pData = (double *) pImage->pData;
-        for (unsigned int i=0; i<arrayInfo.nElements; i++) {
-            pData[i] *= mult;
-        }
 
         status = asynSuccess;
         status |= setIntegerParam(NDArraySize,  (int)arrayInfo.totalBytes);
@@ -280,13 +273,12 @@ void dtacq_adc::dtacqTask()
         }
         getDoubleParam(ADAcquireTime, &acquireTime);
         this->unlock();
-        eventComplete = acquireStopEvent->wait(acquireTime);
+        eventComplete = acquireStopEvent->tryWait();
         this->lock();
         if (eventComplete) {
             acquire = 0;
             printf("Disconnect\n");
-            pasynManager->autoConnect(this->commonDataIPPort, 0);
-            pasynCommonSyncIO->disconnectDevice(this->commonDataIPPort);
+            this->closeSocket();
             getIntegerParam(ADImageMode, &imageMode);
             if (imageMode == ADImageContinuous) {
                 setIntegerParam(ADStatus, ADStatusIdle);
@@ -474,6 +466,11 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     } else if (function == carrierSite) {
         setIntegerParam(carrierSite, value);
         setSiteInformation(value);
+    } else if (function == NDDataType) {
+        if (value == 2)
+            this->setDeviceParameter("data32", "0");
+        else
+            this->setDeviceParameter("data32", "1");
     } else {
         /* If this parameter belongs to a base class call its method */
         if (function < DTACQ_FIRST_PARAMETER)
@@ -607,7 +604,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setIntegerParam(NDArraySizeX, nChannels);
     status |= setIntegerParam(NDArraySizeY, nSamples);
     status |= setIntegerParam(NDArraySize, 0);
-    status |= setIntegerParam(NDDataType, NDFloat64);
+    status |= setIntegerParam(NDDataType, NDInt16);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
     status |= setDoubleParam (ADAcquireTime, 1.0);
     status |= setDoubleParam (ADAcquirePeriod, .005);
