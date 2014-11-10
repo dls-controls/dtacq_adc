@@ -67,7 +67,7 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
     size_t nread = 0;
-    int eomReason, enabled, connected, dType, nBytes, total_read = 0;
+    int eomReason, enabled, connected, dType, nBytes, totalRead = 0;
     pasynManager->isConnected(this->commonDataIPPort, &connected);
     if (!connected) {
         return asynError;
@@ -78,19 +78,19 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
         else
             nBytes = 4;
 // *2 because normally acquiring 16bits but the carrier allows 32 bit.
-        while (total_read < n_samples * n_channels * nBytes) {
+        while (totalRead < n_samples * n_channels * nBytes) {
             status = pasynOctetSyncIO->read(this->octetDataIPPort,
-                                            (char *) this->pRaw->pData + total_read,
-                                            n_samples*n_channels*nBytes - total_read,
+                                            (char *) this->pRaw->pData + totalRead,
+                                            n_samples*n_channels*nBytes - totalRead,
                                             5.0, &nread, &eomReason);
             if (nread == 0) {
                 printf(this->commonDataIPPort->errorMessage);
                 status = asynError;
                 break;
             }
-            total_read += nread;
-            printf("Still in the loop %d %d %d %d\n", total_read, nread, eomReason,
-                   n_samples*n_channels*nBytes - total_read);
+            totalRead += nread;
+            printf("Still in the loop %d %d %d %d\n", totalRead, nread, eomReason,
+                   n_samples*n_channels*nBytes - totalRead);
         }
         printf("Got %d bytes\n", nread);
         if (status != asynSuccess) {
@@ -359,18 +359,18 @@ asynStatus dtacq_adc::setSiteInformation(const epicsInt32 value)
     int eomReason;
     size_t commandLen;
     size_t nbytesIn, nbytesOut;
-    char command[bufferSize], read_buffer[bufferSize];
+    char command[bufferSize], readBuffer[bufferSize];
     int status = asynSuccess;
     commandLen = sprintf(command, "get.site %d module_name\n", value);
     pasynOctetSyncIO->writeRead(controlIPPort, (const char*)command, commandLen,
-                                read_buffer, bufferSize, 2.0,
+                                readBuffer, bufferSize, 2.0,
                                 &nbytesIn, &nbytesOut, &eomReason);
-    status = setStringParam(ADModel, read_buffer);
+    status = setStringParam(ADModel, readBuffer);
     commandLen = sprintf(command, "get.site %d MANUFACTURER\n", value);
     pasynOctetSyncIO->writeRead(controlIPPort, (const char*)command, commandLen,
-                                read_buffer, bufferSize, 2.0,
+                                readBuffer, bufferSize, 2.0,
                                 &nbytesIn, &nbytesOut, &eomReason);
-    status |= setStringParam(ADManufacturer, read_buffer);
+    status |= setStringParam(ADManufacturer, readBuffer);
     return (asynStatus)status;
 }
 
