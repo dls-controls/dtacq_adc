@@ -505,19 +505,15 @@ asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
      * status at the end, but that's OK */
     status = setDoubleParam(function, value);
-    /*if (function == ADAcquireTime) {
-        getIntegerParam(ADSizeY, &nSamples);
+    if (function == ADAcquireTime) {
         this->getDeviceParameter("sysclkhz", readBuffer, bufferSize);
         sysclkhz = atoi(readBuffer);
-        clkdivint = (sysclkhz/nSamples)*value;
+        clkdivint = sysclkhz/value;
         sprintf(clkdiv, "%d", clkdivint);
-        this->setDeviceParmeter("clkdiv", clkdiv);
-        setDoubleParam(ADAcquireTime, value);
-        getDoubleParam(ADAcquirePeriod, &period);
-        if (period < value)
-        setDoubleParam(ADAcquirePeriod, value);
-        } else*/
-    if (function < DTACQ_FIRST_PARAMETER) {
+        this->setDeviceParameter("clkdiv", clkdiv);
+        printf("%d, %d, %d\n", clkdivint, sysclkhz, 1);
+        setDoubleParam(ADAcquireTime, float(sysclkhz)/clkdivint);
+    } else if (function < DTACQ_FIRST_PARAMETER) {
         status = ADDriver::writeFloat64(pasynUser, value);
     }
     /* Do callbacks so higher layers see any changes */
