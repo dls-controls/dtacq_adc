@@ -50,7 +50,7 @@ private:
     /* These are the methods that are new to this class */
     int readArray(int n_samples, int n_channels);
     int computeImage();
-    asynStatus setSiteInformation(const int value);
+    asynStatus setSiteInformation(const epicsInt32 value);
     asynStatus getDeviceParameter(const char *parameter, char *readBuffer,
                                   int bufferLen);
     asynStatus setDeviceParameter(const char *parameter, const char *value);
@@ -67,7 +67,7 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
     size_t nread = 0;
-    int eomReason, enabled, connected, dType, nBytes, totalRead = 0;
+    int eomReason, connected, dType, nBytes, totalRead = 0;
     status = pasynManager->isConnected(this->commonDataIPPort, &connected);
     if (connected) {
         getIntegerParam(NDDataType, &dType);
@@ -92,7 +92,7 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
         }
         if (status != asynSuccess) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                      "N read: %u %d %d\n", nread, eomReason, status);
+                      "N read: %zu %d %d\n", nread, eomReason, status);
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                       "Data port error: %s\n",
                       this->commonDataIPPort->errorMessage);
@@ -249,9 +249,8 @@ void dtacq_adc::dtacqTask()
     int arrayCallbacks;
     int acquire=0;
     NDArray *pImage;
-    double acquireTime, acquirePeriod, delay;
-    epicsTimeStamp startTime, endTime;
-    double elapsedTime;
+    double acquireTime;
+    epicsTimeStamp startTime;
     bool eventComplete = 0;
     const char *functionName = "dtacqTask";
     this->lock();
@@ -288,7 +287,7 @@ void dtacq_adc::dtacqTask()
             callParamCallbacks();
         }
 
-
+        epicsTimeGetCurrent(&startTime);
         /* Update the image */
         status = computeImage();
 
