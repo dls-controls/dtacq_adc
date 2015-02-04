@@ -38,13 +38,13 @@ public:
               int priority, int stackSize);
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
-    virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
     virtual void report(FILE *fp, int details);
     void dtacqTask();
     int dtacq_adcInvert;
 #define DTACQ_FIRST_PARAMETER dtacq_adcInvert
-    int carrierSite;
-#define DTACQ_NUM_PARAMETERS ((int) (&carrierSite - &DTACQ_FIRST_PARAMETER + 1))
+    int aggregationSites;
+    int masterSite;
+#define DTACQ_NUM_PARAMETERS ((int) (&masterSite - &DTACQ_FIRST_PARAMETER + 1))
 
 private:
     /* These are the methods that are new to this class */
@@ -82,17 +82,20 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
                 n_samples*n_channels*nBytes - totalRead,
                 5.0, &nread, &eomReason);
             if (nread == 0) {
-                printf(this->commonDataIPPort->errorMessage);
+                asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                          "No data read; data port error: %s\n",
+                          this->commonDataIPPort->errorMessage);
                 status = asynError;
                 break;
             }
             totalRead += nread;
-            printf("Still in the loop %d %d %d %d\n", totalRead, nread,
-                   eomReason, n_samples*n_channels*nBytes - totalRead);
         }
-        printf("Got %d bytes\n", nread);
         if (status != asynSuccess) {
-            printf("N read: %u %d %d\n", nread, eomReason, status);
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                      "N read: %u %d %d\n", nread, eomReason, status);
+            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                      "Data port error: %s\n",
+                      this->commonDataIPPort->errorMessage);
         }
     }
     return status;
@@ -169,8 +172,8 @@ int dtacq_adc::computeImage()
     /* Free the previous raw buffer */
         if (this->pRaw) this->pRaw->release();
         /* Allocate the raw buffer we use to compute images. */
-        dims[xDim] = maxSizeX;
-        dims[yDim] = maxSizeY;
+        dims[xDim] = sizeX;
+        dims[yDim] = sizeY;
         this->pRaw = this->pNDArrayPool->alloc(
             ndims, dims, dataType, 0, NULL);
         if (!this->pRaw) {
@@ -181,7 +184,7 @@ int dtacq_adc::computeImage()
         }
     }
     this->unlock();
-    status = readArray(maxSizeX, maxSizeY);
+    status = readArray(sizeX, sizeY);
     this->lock();
     if (status) {
         return(status);
@@ -275,7 +278,6 @@ void dtacq_adc::dtacqTask()
         this->lock();
         if (eventComplete) {
             acquire = 0;
-            printf("Disconnect\n");
             this->closeSocket();
             getIntegerParam(ADImageMode, &imageMode);
             if (imageMode == ADImageContinuous) {
@@ -306,7 +308,6 @@ void dtacq_adc::dtacqTask()
         getIntegerParam(NDArrayCallbacks, &arrayCallbacks);
         imageCounter++;
         numImagesCounter++;
-        printf("N images %d %d %d\n", imageCounter, numImagesCounter, numImages);
         setIntegerParam(NDArrayCounter, imageCounter);
         setIntegerParam(ADNumImagesCounter, numImagesCounter);
 
@@ -328,7 +329,6 @@ void dtacq_adc::dtacqTask()
             this->lock();
         }
         getIntegerParam(ADImageMode, &imageMode);
-        printf("Image mode is continuous? %d %d\n", imageMode == ADImageContinuous, imageMode);
         /* See if acquisition is done */
         if ((imageMode == ADImageSingle) ||
             ((imageMode == ADImageMultiple) &&
@@ -340,9 +340,6 @@ void dtacq_adc::dtacqTask()
             this->closeSocket();
             callParamCallbacks();
             acquire = 0;
-            //printf("Set acquire %d\n", setIntegerParam(ADAcquire, acquire));
-            //this->writeInt32(this->
-            printf("call param callbacks %d\n", callParamCallbacks());
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW,
                       "%s:%s: acquisition completed\n", driverName,
                       functionName);
@@ -379,9 +376,11 @@ asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *valu
     char command[bufferSize];
     int status = asynSuccess;
     epicsInt32 site;
-    status = getIntegerParam(this->carrierSite, &site);
+    status = getIntegerParam(this->masterSite, &site);
     commandLen = sprintf(command, "set.site %d %s %s\n", site, parameter,
                          value);
+    asynPrint(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, "setDevParam: %s\n",
+              command);
     status |= pasynOctetSyncIO->write(controlIPPort, (const char*) command,
                                       commandLen, 2.0, &nbytesOut);
     return (asynStatus)status;
@@ -396,8 +395,10 @@ asynStatus dtacq_adc::getDeviceParameter(const char *parameter,
     char command[bufferSize];
     int status = asynSuccess;
     epicsInt32 site;
-    status = getIntegerParam(this->carrierSite, &site);
+    status = getIntegerParam(this->masterSite, &site);
     commandLen = sprintf(command, "get.site %d %s\n", site, parameter);
+    asynPrint(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, "getDevParam: %s\n",
+              command);
     status |= pasynOctetSyncIO->writeRead(controlIPPort, (const char*) command,
                                           commandLen, readBuffer, bufferLen,
                                           2.0, &nbytesIn, &nbytesOut, &eomReason);
@@ -415,14 +416,12 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     int adstatus;
     int acquiring;
     int imageMode;
-    int site;
     size_t commandLen, nbytesOut;
     asynStatus status = asynSuccess;
-    char command[9];
+    char command[9], sites[STRINGLEN];
     /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
     getIntegerParam(ADStatus, &adstatus);
     getIntegerParam(ADAcquire, &acquiring);
-    printf("Value %d, acquiring? %d\n", value, acquiring);
     if (function == ADAcquire) {
         if (value && !acquiring) {
             setStringParam(ADStatusMessage, "Acquiring data");
@@ -445,11 +444,10 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     /* For a real detector this is where the parameter is sent to the hardware */
     if (function == ADAcquire) {
         if (value && !acquiring) {
-            getIntegerParam(carrierSite, &site);
-            commandLen = sprintf(command, "run0 %d\n", site);
+            getStringParam(aggregationSites, STRINGLEN, sites);
+            commandLen = sprintf(command, "run0 %s\n", sites);
             pasynOctetSyncIO->write(controlIPPort, command, commandLen, 2,
                                     &nbytesOut);
-            printf("dataPortName %s#\n", this->dataPortName);
             pasynOctetSyncIO->connect(this->dataPortName, -1,
                                       &this->octetDataIPPort, NULL);
             pasynCommonSyncIO->connect(this->dataPortName, -1,
@@ -460,9 +458,10 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             /* This was a command to stop acquisition */
             /* Send the stop event */
             acquireStopEvent->signal();
+            this->closeSocket();
         }
-    } else if (function == carrierSite) {
-        setIntegerParam(carrierSite, value);
+    } else if (function == masterSite) {
+        setIntegerParam(masterSite, value);
         setSiteInformation(value);
     } else if (function == NDDataType) {
         if (value == 2)
@@ -483,46 +482,6 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     else
         asynPrint(pasynUser, ASYN_TRACEIO_DRIVER,
               "%s:writeInt32: function=%d, value=%d\n",
-              driverName, function, value);
-    return status;
-}
-
-/* Called when asyn clients call pasynFloat64->write().
-   This function performs actions for some parameters, including ADAcquireTime, ADGain, etc.
-   For all parameters it sets the value in the parameter library and calls any registered callbacks..
-   \param[in] pasynUser pasynUser structure that encodes the reason and address.
-   \param[in] value Value to write.
-*/
-asynStatus dtacq_adc::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
-{
-    int function = pasynUser->reason;
-    int nChannels, nSamples, sysclkhz, clkdivint;
-    char readBuffer[bufferSize], clkdiv[bufferSize];
-    asynStatus status = asynSuccess;
-    double period;
-    /* Set the parameter and readback in the parameter library.  This may be overwritten when we read back the
-     * status at the end, but that's OK */
-    status = setDoubleParam(function, value);
-    if (function == ADAcquireTime) {
-        this->getDeviceParameter("sysclkhz", readBuffer, bufferSize);
-        sysclkhz = atoi(readBuffer);
-        clkdivint = sysclkhz/value;
-        sprintf(clkdiv, "%d", clkdivint);
-        this->setDeviceParameter("clkdiv", clkdiv);
-        printf("%d, %d, %d\n", clkdivint, sysclkhz, 1);
-        setDoubleParam(ADAcquireTime, float(sysclkhz)/clkdivint);
-    } else if (function < DTACQ_FIRST_PARAMETER) {
-        status = ADDriver::writeFloat64(pasynUser, value);
-    }
-    /* Do callbacks so higher layers see any changes */
-    callParamCallbacks();
-    if (status)
-        asynPrint(pasynUser, ASYN_TRACE_ERROR,
-              "%s:writeFloat64 error, status=%d function=%d, value=%f\n",
-              driverName, status, function, value);
-    else
-        asynPrint(pasynUser, ASYN_TRACEIO_DRIVER,
-              "%s:writeFloat64: function=%d, value=%f\n",
               driverName, function, value);
     return status;
 }
@@ -588,7 +547,8 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     acquireStartEvent = new epicsEvent();
     acquireStopEvent = new epicsEvent();
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
-    createParam("CARRIER_SITE", asynParamInt32, &carrierSite);
+    createParam("MASTER_SITE", asynParamInt32, &masterSite);
+    createParam("AGGR_SITES", asynParamOctet, &aggregationSites);
     callParamCallbacks();
     /* Set some default values for parameters */
     status = setIntegerParam(ADMaxSizeX, nChannels);
@@ -598,10 +558,9 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setIntegerParam(NDArraySizeX, nChannels);
     status |= setIntegerParam(NDArraySizeY, nSamples);
     status |= setIntegerParam(NDArraySize, 0);
-    status |= setIntegerParam(NDDataType, NDInt16);
+    status |= setIntegerParam(NDDataType, NDInt32);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
-    status |= setDoubleParam (ADAcquireTime, 1.0);
-    status |= setDoubleParam (ADAcquirePeriod, .005);
+    status |= setIntegerParam(masterSite, 1);
     status |= setIntegerParam(ADNumImages, 100);
     if (status) {
         printf("%s: unable to set camera parameters\n", functionName);
@@ -621,7 +580,6 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     /* Connect to the ip port */
     pasynOctetSyncIO->connect(controlPortName, -1, &this->controlIPPort, NULL);
     drvAsynIPPortConfigure(this->dataPortName, this->dataHostInfo, 0, 1, 0);
-    //pasynManager->connectDevice(
 }
 
 /* Configuration command, called directly or from iocsh */

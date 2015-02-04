@@ -5,7 +5,9 @@
 #% macro, TIMEOUT, Timeout
 #% macro, ADDR, Asyn Port address
 #% macro, INVERT, If 1 then multiply output signals by -1
-#% macro, CARRIER_SITE, The location of the card in the carrier
+#% macro, MASTER_SITE, The location of the card that sets the clock \
+# (this may require setting /etc/acq400/n/peers)
+#% macro, AGGREGATION_SITES, A comma seperated list of sites to read from
 
 # This associates the template with an edm screen
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
@@ -37,17 +39,72 @@ record(mbbi, "$(P)$(R)INVERT_RBV")
    field(ONVL, "1")
 }
 
-record(ao, "$(P)$(R)CARRIER_SITE")
+record(longout, "$(P)$(R)MASTER_SITE")
 {
     field(DTYP, "asynInt32")
-    field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CARRIER_SITE")
-    field(VAL, "$(CARRIER_SITE=1)")
+    field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))MASTER_SITE")
+    field(VAL, "$(MASTER_SITE=1)")
     field(PINI, "YES")
 }
 
-record(ai, "$(P)$(R)CARRIER_SITE_RBV")
+record(longin, "$(P)$(R)MASTER_SITE_RBV")
 {
     field(DTYP, "asynInt32")
-    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CARRIER_SITE")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))MASTER_SITE")
     field(SCAN, "I/O Intr")
+}
+
+record(stringout, "$(P)$(R)AGGR_SITES")
+{
+    field(DTYP, "asynOctetWrite")
+    field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))AGGR_SITES")
+    field(VAL, "$(AGGREGATION_SITES='1')")
+    field(PINI, "YES")
+}
+
+record(stringin, "$(P)$(R)AGGR_SITES_RBV")
+{
+    field(DTYP, "asynOctetRead")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))AGGR_SITES")
+    field(SCAN, "I/O Intr")
+}
+
+record(mbbo, "$(P)$(R)DataType")
+{
+    field(ZRST, "Int16")
+    field(ZRVL, "2")
+    field(ONST, "Int32")
+    field(ONVL, "4")
+    field(TWST, "")
+    field(TWVL, "")
+    field(THST, "")
+    field(THVL, "")
+    field(FRST, "")
+    field(FRVL, "")
+    field(FVST, "")
+    field(FVVL, "")
+    field(SXST, "")
+    field(SXVL, "")
+    field(SVST, "")
+    field(SVVL, "")
+}
+
+record(mbbi, "$(P)$(R)DataType_RBV")
+{
+    field(ZRST, "Int16")
+    field(ZRVL, "2")
+    field(ONST, "Int32")
+    field(ONVL, "4")
+    field(TWST, "")
+    field(TWVL, "")
+    field(THST, "")
+    field(THVL, "")
+    field(FRST, "")
+    field(FRVL, "")
+    field(FVST, "")
+    field(FVVL, "")
+    field(SXST, "")
+    field(SXVL, "")
+    field(SVST, "")
+    field(SVVL, "")
 }

@@ -1,13 +1,9 @@
 <?xml version="1.0" ?>
 <components arch="linux-x86">
-	<dtacq_adc.dtacq_adc ADDR="0" CONTROL_IP="acq1001_040:4220" DATA_IP="acq1001_040:4210" P="TESTDTACQADC" PORT="XBPM.ADC.Ctrl" R=":ADC:CTRL:" TIMEOUT="1"/>
-	<!--<areaDetector.NDAttributes attrname="CameraModel" datatype="STRING" description="Camera model" port="CAM1.CAM" source="MODEL" type="PARAM"/>-->
-	<areaDetector.NDAttributes attrname="RingCurrent" description="Machine Ring Current" port="XBPM.ADC.Ctrl" source="SR-DI-DCCT-01:SIGNAL"/>
-	<adUtil.BPM_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.ADC.BPMC" R=":ADC:BPMC:" TIMEOUT="1"/>
+	<dtacq_adc.dtacq_adc ADDR="0" AGGREGATION_SITES="1,2" CONTROL_IP="172.23.253.10:4220" DATA_IP="172.23.253.10:4210" NCHANNELS="32" NSAMPLES="10000" P="TESTDTACQADC" PORT="XBPM.ADC.Ctrl" R=":ADC:CTRL:" TIMEOUT="1"/>
+	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.ADC.Retype" R=":ADC:RETYPE:" TIMEOUT="0"/>
+	<adUtil.BPM_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Retype" P="TESTDTACQADC" PORT="XBPM.ADC.BPMC" R=":ADC:BPMC:" TIMEOUT="1"/>
 	<adUtil.FFT_calc ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.BPMC" P="TESTDTACQADC" PORT="XBPM.ADC.FFT" R=":ADC:FFT:" TIMEOUT="1"/>
-	<areaDetector.NDProcess ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.FFT" P="TESTDTACQADC" PORT="XBPM.File.Proc" R=":FILE:PROC:" TIMEOUT="1"/>
-	<areaDetector.NDFileHDF5 ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.BPMC" P="TESTDTACQADC" PORT="XBPM.File.H5" R=":FILE:H5:" TIMEOUT="1"/>
-	<areaDetector.NDFileHDF5 ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.File.Proc" P="TESTDTACQADC" PORT="XBPM.File.H5FFT" R=":FILE:H5FFT:" TIMEOUT="1"/>
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.ASig.Roi" R=":ASIG:ROI:" TIMEOUT="1"/>
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.BSig.Roi" R=":BSIG:ROI:" TIMEOUT="1"/>
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.Ctrl" P="TESTDTACQADC" PORT="XBPM.CSig.Roi" R=":CSIG:ROI:" TIMEOUT="1"/>
@@ -18,16 +14,9 @@
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.FFT" P="TESTDTACQADC" PORT="XBPM.XSig.RoiFFT" R=":XSIG:ROIFFT:" TIMEOUT="1"/>
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.FFT" P="TESTDTACQADC" PORT="XBPM.YSig.RoiFFT" R=":YSIG:ROIFFT:" TIMEOUT="1"/>
 	<areaDetector.NDROI ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.FFT" P="TESTDTACQADC" PORT="XBPM.ISig.RoiFFT" R=":ISIG:ROIFFT:" TIMEOUT="1"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ASig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ASig.Arr" R=":ASIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.BSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.BSig.Arr" R=":BSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.CSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.CSig.Arr" R=":CSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.DSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.DSig.Arr" R=":DSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.XSig.Arr" R=":XSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.YSig.Arr" R=":YSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ISig.Arr" R=":ISIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.XSig.ArrFFT" R=":XSIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.YSig.ArrFFT" R=":YSIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
-	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ISig.ArrFFT" R=":ISIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDProcess ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.FFT" P="TESTDTACQADC" PORT="XBPM.File.Proc" R=":FILE:PROC:" TIMEOUT="1"/>
+	<areaDetector.NDFileHDF5 ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ADC.BPMC" P="TESTDTACQADC" PORT="XBPM.File.H5" R=":FILE:H5:" TIMEOUT="1"/>
+	<areaDetector.NDFileHDF5 ADDR="0" Enabled="1" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.File.Proc" P="TESTDTACQADC" PORT="XBPM.File.H5FFT" R=":FILE:H5FFT:" TIMEOUT="1"/>
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ASig.Roi" P="TESTDTACQADC" PORT="XBPM.ASig.Stat" R=":ASIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.BSig.Roi" P="TESTDTACQADC" PORT="XBPM.BSig.Stat" R=":BSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" Enabled="1" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.CSig.Roi" P="TESTDTACQADC" PORT="XBPM.CSig.Stat" R=":CSIG:STAT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
@@ -38,11 +27,23 @@
 	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.XSig.StatFFT" R=":XSIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.YSig.StatFFT" R=":YSIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
 	<areaDetector.NDStats ADDR="0" HIST_SIZE="256" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.RoiFFT" P="TESTDTACQADC" PORT="XBPM.ISig.StatFFT" R=":ISIG:STATFFT:" TIMEOUT="1" XSIZE="1" YSIZE="100000"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ASig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ASig.Arr" R=":ASIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.BSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.BSig.Arr" R=":BSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.CSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.CSig.Arr" R=":CSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.DSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.DSig.Arr" R=":DSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.XSig.Arr" R=":XSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.YSig.Arr" R=":YSIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.Roi" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ISig.Arr" R=":ISIG:ARR:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.XSig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.XSig.ArrFFT" R=":XSIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.YSig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.YSig.ArrFFT" R=":YSIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
+	<areaDetector.NDStdArrays ADDR="0" Enabled="1" FTVL="DOUBLE" NDARRAY_ADDR="0" NDARRAY_PORT="XBPM.ISig.RoiFFT" NELEMENTS="100000" P="TESTDTACQADC" PORT="XBPM.ISig.ArrFFT" R=":ISIG:ARRFFT:" TIMEOUT="1" TYPE="Float64"/>
 	<EPICS_BASE.EpicsEnvSet key="EPICS_CA_MAX_ARRAY_BYTES" value="6000000"/>
-	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ADC:CTRL:BinY&quot;, 10)" post_init="True"/>
+	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ADC:CTRL:BinY&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:EnableX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:SizeX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:MinX&quot;, 0)" post_init="True"/>
+	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:Scale&quot;, 3277)" post_init="True"/>
+	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ASIG:ROI:DataTypeOut&quot;, Float64)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:BSIG:ROI:EnableX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:BSIG:ROI:SizeX&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:BSIG:ROI:MinX&quot;, 1)" post_init="True"/>
@@ -70,6 +71,9 @@
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:EnableY&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:SizeY&quot;, 1)" post_init="True"/>
 	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ISIG:ROIFFT:MinY&quot;, 2)" post_init="True"/>
+	<EPICS_BASE.StartupCommand command="dbpf(&quot;TESTDTACQADC:ADC:RETYPE:DataTypeOut&quot;, Float64)" post_init="True"/>
+	<!--<EPICS_BASE.StartupCommand command="asynSetTraceMask(&quot;XBPM.ADC.Ctrl.data&quot;, 1, 63)"/>-->
+	<!--<EPICS_BASE.StartupCommand command="asynSetTraceIOMask(&quot;XBPM.ADC.Ctrl.data&quot;, 1, 2)"/>-->
 	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:ASIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":ASIG:Average" SCAN="Passive" name="XBPM.AverageA"/>
 	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:BSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":BSIG:Average" SCAN="Passive" name="XBPM.AverageB"/>
 	<userIO.ai DTYP="Soft Channel" EGU="V" EGUF="10" EGUL="-10" INP="TESTDTACQADC:CSIG:STAT:MeanValue_RBV CP" LINR="LINEAR" P="TESTDTACQADC" PREC="3" R=":CSIG:Average" SCAN="Passive" name="XBPM.AverageC"/>

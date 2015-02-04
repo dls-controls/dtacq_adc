@@ -12,7 +12,6 @@ class dtacq_adc(_ADBase):
     _SpecificTemplate = _dtacq_adc
     def __init__(self, DATA_IP, CONTROL_IP, NCHANNELS=4, NSAMPLES=1000000,
                  BUFFERS=50, MEMORY=0, **args):
-        self.dataPort = AsynIP(DATA_IP, name = args["PORT"] + ".data")
         self.controlPort = AsynIP(CONTROL_IP, name = args["PORT"] + ".control")
         # Init the superclass (_ADBase)
         self.__super.__init__(**args)
@@ -39,7 +38,8 @@ class dtacq_adc(_ADBase):
     def Initialise(self):
         print(
 '''# dtacq_adcConfig(portName, dataPortName, controlPortName,
-#                 nChannels, nSamples, maxBuffers, maxMemory)''')
+#                 nChannels, nSamples, maxBuffers, maxMemory,
+#                 dataHostInfo)''')
         print('''dtacq_adcConfig("%(PORT)s", "%(PORT)s.data", \
 "%(PORT)s.control", %(NCHANNELS)d, %(NSAMPLES)d, \
-%(BUFFERS)d, %(MEMORY)d)''' % self.__dict__)
+%(BUFFERS)d, %(MEMORY)d, "%(DATA_IP)s")''' % self.__dict__)
