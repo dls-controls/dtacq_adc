@@ -4,6 +4,7 @@
 #% macro, PORT, Asyn Port name
 #% macro, TIMEOUT, Timeout
 #% macro, ADDR, Asyn Port address
+#% macro, GAIN, Voltage range selection
 #% macro, INVERT, If 1 then multiply output signals by -1
 #% macro, MASTER_SITE, The location of the card that sets the clock \
 # (this may require setting /etc/acq400/n/peers)
@@ -13,9 +14,42 @@
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
 
 ###################################################################
-#  These records control whether to invert input signal (+ve/-ve)   #
+#  These records expose the gain control (voltage range)
 ###################################################################
-# % autosave 2 
+# % autosave 2
+record(mbbo, "$(P)$(R)RANGE") {
+   field(DTYP, "asynInt32")
+   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))RANGE")
+   field(VAL, "$(GAIN=0)")
+   field(ZRST, "+-10 V")
+   field(ZRVL, "0")
+   field(ONST, "+-5 V")
+   field(ONVL, "1")
+   field(TWST, "+-2.5 V")
+   field(TWVL, "2")
+   field(THST, "+-1.25 V")
+   field(THVL, "3")
+   field(PINI, "YES")
+}
+
+record(mbbi, "$(P)$(R)RANGE_RBV") {
+   field(DTYP, "asynInt32")
+   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))RANGE")
+   field(SCAN, "I/O Intr")
+   field(ZRST, "10 V")
+   field(ZRVL, "0")
+   field(ONST, "5 V")
+   field(ONVL, "1")
+   field(TWST, "2.5 V")
+   field(TWVL, "2")
+   field(THST, "1.25 V")
+   field(THVL, "3")
+}
+
+###################################################################
+#  These records control whether to invert input signal (+ve/-ve)
+###################################################################
+# % autosave 2
 record(mbbo, "$(P)$(R)INVERT")
 {
    field(DTYP, "asynInt32")
@@ -39,6 +73,9 @@ record(mbbi, "$(P)$(R)INVERT_RBV")
    field(ONVL, "1")
 }
 
+###################################################################
+#  These records select the master site
+###################################################################
 record(longout, "$(P)$(R)MASTER_SITE")
 {
     field(DTYP, "asynInt32")
@@ -54,6 +91,9 @@ record(longin, "$(P)$(R)MASTER_SITE_RBV")
     field(SCAN, "I/O Intr")
 }
 
+###################################################################
+#  These records set the aggregations sites
+###################################################################
 record(stringout, "$(P)$(R)AGGR_SITES")
 {
     field(DTYP, "asynOctetWrite")
@@ -69,6 +109,9 @@ record(stringin, "$(P)$(R)AGGR_SITES_RBV")
     field(SCAN, "I/O Intr")
 }
 
+###################################################################
+#  areaDetector overrides
+###################################################################
 record(mbbo, "$(P)$(R)DataType")
 {
     field(ZRST, "Int16")

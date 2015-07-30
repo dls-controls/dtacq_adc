@@ -11,6 +11,10 @@
 #include <asynDriver.h>
 #include <drvAsynIPPort.h>
 
+#include <map>
+#include <vector>
+#include <stdexcept>
+
 #include <epicsTime.h>
 #include <epicsThread.h>
 #include <epicsEvent.h>
@@ -44,7 +48,8 @@ public:
 #define DTACQ_FIRST_PARAMETER dtacq_adcInvert
     int aggregationSites;
     int masterSite;
-#define DTACQ_NUM_PARAMETERS ((int) (&masterSite - &DTACQ_FIRST_PARAMETER + 1))
+    int gain;
+#define DTACQ_NUM_PARAMETERS ((int) (&gain - &DTACQ_FIRST_PARAMETER + 1))
 
 private:
     /* These are the methods that are new to this class */
@@ -55,12 +60,22 @@ private:
                                   int bufferLen);
     asynStatus setDeviceParameter(const char *parameter, const char *value);
     void closeSocket();
+    asynStatus calculateConversionFactor(int gainSelection, double *factor);
+    asynStatus applyScaling(NDArray *pFrame);
+    asynStatus applyBitMask(NDArray *pFrame);
+    int nElements(NDArray *pFrame);
     epicsEvent *acquireStartEvent;
     epicsEvent *acquireStopEvent;
     NDArray *pRaw;
     char dataPortName[STRINGLEN], dataHostInfo[STRINGLEN];
     asynUser *commonDataIPPort, *octetDataIPPort;
     asynUser *controlIPPort;
+    std::map<int, std::vector<double> > ranges;
+    int moduleType;
+    double count2volt;
+
+    /* Mask to zero out the site/channel information in 24bit data */
+    static const int bitMask = 0xffffff00;
 };
 
 int dtacq_adc::readArray(int n_samples, int n_channels)
@@ -90,6 +105,9 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
             }
             totalRead += nread;
         }
+        /* Mask out the last 8 bits if we have 24bit data in a 32bit word */
+        if (nBytes == 4) status = applyBitMask(this->pRaw);
+
         if (status != asynSuccess) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                       "N read: %zu %d %d\n", nread, eomReason, status);
@@ -204,7 +222,8 @@ int dtacq_adc::computeImage()
            read() function. Now release it before getting a new version. */
         if (this->pArrays[0]) this->pArrays[0]->release();
         status = this->pNDArrayPool->convert(this->pRaw, &this->pArrays[0],
-                                             dataType, dimsOut);
+                                             NDFloat64, dimsOut);
+        status = applyScaling(this->pArrays[0]);
         if (status) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
                       "%s:%s: error allocating buffer in convert()\n",
@@ -404,6 +423,60 @@ asynStatus dtacq_adc::getDeviceParameter(const char *parameter,
     return (asynStatus)status;
 }
 
+asynStatus dtacq_adc::calculateConversionFactor(int gainSelection, double *factor) {
+    const char *functionName = "calculateConversionFactor";
+    asynStatus status;
+    int nbits;
+    double inRange, outRange;
+    getIntegerParam(NDDataType, &nbits);
+    if (nbits == 2) nbits = 16;
+    else nbits = 32;
+    try {
+        inRange = pow(2, nbits);
+        outRange = 2 * this->ranges.at(this->moduleType).at(gainSelection);
+        *factor = outRange / inRange;
+        status = asynSuccess;
+    } catch (const std::out_of_range& oor) {
+        printf("%s:%s caught out_of_range exception, received moduleType=%d, gainSelection=%d\n",
+            driverName, functionName, moduleType, gainSelection);
+        status = asynError;
+    }
+    return status;
+}
+
+asynStatus dtacq_adc::applyScaling(NDArray *pFrame) {
+    const char *functionName = "applyScaling";
+    if (pFrame == NULL) {
+        printf("%s:%s unable to apply scaling, pFrame is NULL\n", driverName, functionName);
+        return asynError;
+    } else {
+        double *pDoubles = (double *)(pFrame->pData);
+        for (int i = 0; i < this->nElements(pFrame); i++) pDoubles[i] = pDoubles[i] * this->count2volt;
+        return asynSuccess;
+    }
+}
+
+asynStatus dtacq_adc::applyBitMask(NDArray *pFrame) {
+    const char *functionName = "applyBitMask";
+    if (pFrame == NULL) {
+        printf("%s:%s unable to apply bit mask, pFrame is NULL\n", driverName, functionName);
+        return asynError;
+    } else {
+        int *pInts = (int *)(pFrame->pData);
+        for (int i = 0; i < this->nElements(pFrame); i++) pInts[i] = pInts[i] & this->bitMask;
+        return asynSuccess;
+    }
+}
+
+int dtacq_adc::nElements(NDArray *pFrame) {
+    if (pFrame == NULL) return 0;
+    else {
+        int nelements = 1;
+        for (int i = 0; i < pFrame->ndims; i++) nelements = nelements * pFrame->dims[i].size;
+        return nelements;
+    }
+}
+
 /* Called when asyn clients call pasynInt32->write().
    This function performs actions for some parameters, including ADAcquire, ADColorMode, etc.
    For all parameters it sets the value in the parameter library and calls any registered callbacks..
@@ -467,6 +540,11 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             this->setDeviceParameter("data32", "0");
         else
             this->setDeviceParameter("data32", "1");
+    } else if (function == gain) {
+        // Horrible but convenient misuse of variables command and commandLen...
+        commandLen = sprintf(command, "%d", value);
+        this->setDeviceParameter("gain", command);
+        status = calculateConversionFactor(value, &count2volt);
     } else {
         /* If this parameter belongs to a base class call its method */
         if (function < DTACQ_FIRST_PARAMETER)
@@ -493,7 +571,7 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
 */
 void dtacq_adc::report(FILE *fp, int details)
 {
-    fprintf(fp, "D-Tacq ACQ420FMC ADC %s\n", this->portName);
+    fprintf(fp, "D-Tacq ADC %s\n", this->portName);
     if (details > 0) {
         int nx, ny, dataType;
         getIntegerParam(ADSizeX, &nx);
@@ -545,10 +623,10 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
        when acquisition starts and stops */
     acquireStartEvent = new epicsEvent();
     acquireStopEvent = new epicsEvent();
+    createParam("RANGE", asynParamInt32, &gain);
     createParam("INVERT", asynParamInt32, &dtacq_adcInvert);
     createParam("MASTER_SITE", asynParamInt32, &masterSite);
     createParam("AGGR_SITES", asynParamOctet, &aggregationSites);
-    callParamCallbacks();
     /* Set some default values for parameters */
     status = setIntegerParam(ADMaxSizeX, nChannels);
     status |= setIntegerParam(ADMaxSizeY, nSamples);
@@ -559,12 +637,23 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setIntegerParam(NDArraySize, 0);
     status |= setIntegerParam(NDDataType, NDInt32);
     status |= setIntegerParam(ADImageMode, ADImageContinuous);
+    status |= setIntegerParam(gain, 0);
     status |= setIntegerParam(masterSite, 1);
     status |= setIntegerParam(ADNumImages, 100);
     if (status) {
         printf("%s: unable to set camera parameters\n", functionName);
         return;
     }
+    /* All three DLS-supported cards happen to have the same selection of voltage ranges */
+    std::vector<double> gains;
+    gains.push_back(10.0);
+    gains.push_back(5.0);
+    gains.push_back(2.5);
+    gains.push_back(1.25);
+    /* Initialise the map of voltages ranges (key value is the module type as defined by the manufacturer) */
+    ranges.insert(std::pair<int, std::vector<double> >(1, gains)); // ACQ420FMC
+    ranges.insert(std::pair<int, std::vector<double> >(5, gains)); // ACQ425ELF
+    ranges.insert(std::pair<int, std::vector<double> >(6, gains)); // ACQ437ELF
     /* Create the thread that updates the images */
     status = (epicsThreadCreate("D-TACQTask",
                                 epicsThreadPriorityMedium,
@@ -579,6 +668,23 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     /* Connect to the ip port */
     pasynOctetSyncIO->connect(controlPortName, -1, &this->controlIPPort, NULL);
     drvAsynIPPortConfigure(this->dataPortName, this->dataHostInfo, 0, 1, 0);
+    /* Get the module type for the gain adjustments */
+    char rbuf[2];
+    rbuf[0] = '\0';
+    status = this->getDeviceParameter("module_type", rbuf, 2);
+    this->moduleType = atoi(rbuf);
+    if (status) {
+        printf("%s:%s failed to retrieve parameter module_type from the device\n",
+            driverName, functionName);
+        return;
+    }
+    /* Initialise conversion factor to the same default selection as gain */
+    count2volt = 0;
+    status = calculateConversionFactor(0, &count2volt);
+    if (status) {
+        printf("%s:%s failed to calculate the voltage range conversion factor, count2volt=%f\n",
+            driverName, functionName, count2volt);
+    }
 }
 
 /* Configuration command, called directly or from iocsh */
