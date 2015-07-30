@@ -44,6 +44,7 @@ public:
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual void report(FILE *fp, int details);
     void dtacqTask();
+    /* Parameters specific to dtacq_adc (areaDetector) */
     int dtacq_adcInvert;
 #define DTACQ_FIRST_PARAMETER dtacq_adcInvert
     int aggregationSites;
@@ -52,32 +53,38 @@ public:
 #define DTACQ_NUM_PARAMETERS ((int) (&gain - &DTACQ_FIRST_PARAMETER + 1))
 
 private:
-    /* These are the methods that are new to this class */
+    /* Frame handling functions */
     int readArray(int n_samples, int n_channels);
     int computeImage();
+    /* Connection handling and device communication functions */
     asynStatus setSiteInformation(const epicsInt32 value);
     asynStatus getDeviceParameter(const char *parameter, char *readBuffer,
                                   int bufferLen);
     asynStatus setDeviceParameter(const char *parameter, const char *value);
     void closeSocket();
+    /* Data processing functions */
     asynStatus calculateConversionFactor(int gainSelection, double *factor);
     asynStatus applyScaling(NDArray *pFrame);
     asynStatus applyBitMask(NDArray *pFrame);
     int nElements(NDArray *pFrame);
+    /* Events */
     epicsEvent *acquireStartEvent;
     epicsEvent *acquireStopEvent;
+    /* Raw frame (read from device data port) */
     NDArray *pRaw;
+    /* Device communication parameters*/
     char dataPortName[STRINGLEN], dataHostInfo[STRINGLEN];
     asynUser *commonDataIPPort, *octetDataIPPort;
     asynUser *controlIPPort;
+    /* Gain control parameters and value scaling */
     std::map<int, std::vector<double> > ranges;
     int moduleType;
     double count2volt;
-
     /* Mask to zero out the site/channel information in 24bit data */
     static const int bitMask = 0xffffff00;
 };
 
+/* Reads a raw frame from the data stream on port 4210 */
 int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
@@ -221,8 +228,10 @@ int dtacq_adc::computeImage()
         /* We save the most recent image buffer so it can be used in the
            read() function. Now release it before getting a new version. */
         if (this->pArrays[0]) this->pArrays[0]->release();
+        /* Convert the raw frame to NDFloat64 and apply driver ROI */
         status = this->pNDArrayPool->convert(this->pRaw, &this->pArrays[0],
                                              NDFloat64, dimsOut);
+        /* Scale the raw values down to voltages */
         status = applyScaling(this->pArrays[0]);
         if (status) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -250,6 +259,7 @@ static void dtacqTaskC(void *drvPvt)
     pPvt->dtacqTask();
 }
 
+/* Disconnect from the data stream. Called at the end of each acquisition */
 void dtacq_adc::closeSocket()
 {
     pasynManager->autoConnect(this->commonDataIPPort, 0);
@@ -387,6 +397,7 @@ asynStatus dtacq_adc::setSiteInformation(const epicsInt32 value)
     return (asynStatus)status;
 }
 
+/* Send a command to the controls port (in native notation) */
 asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *value)
 {
     size_t commandLen;
@@ -404,6 +415,7 @@ asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *valu
     return (asynStatus)status;
 }
 
+/* Read a device parameter from the controls port (in native notation) */
 asynStatus dtacq_adc::getDeviceParameter(const char *parameter,
                                          char *readBuffer, int bufferLen)
 {
@@ -423,6 +435,7 @@ asynStatus dtacq_adc::getDeviceParameter(const char *parameter,
     return (asynStatus)status;
 }
 
+/* Calculate the scaling factor to convert from raw values to voltages within the current range */
 asynStatus dtacq_adc::calculateConversionFactor(int gainSelection, double *factor) {
     const char *functionName = "calculateConversionFactor";
     asynStatus status;
@@ -444,6 +457,8 @@ asynStatus dtacq_adc::calculateConversionFactor(int gainSelection, double *facto
     return status;
 }
 
+/* Scale every value in pFrame to fit the current voltage range.
+   Assumes type Float64 for pFrame contents */
 asynStatus dtacq_adc::applyScaling(NDArray *pFrame) {
     const char *functionName = "applyScaling";
     if (pFrame == NULL) {
@@ -456,6 +471,8 @@ asynStatus dtacq_adc::applyScaling(NDArray *pFrame) {
     }
 }
 
+/* Apply the bit mask that deletes the site and channel number embedded in the raw values.
+   Assumes type Int32 for pFrame contents */
 asynStatus dtacq_adc::applyBitMask(NDArray *pFrame) {
     const char *functionName = "applyBitMask";
     if (pFrame == NULL) {
@@ -468,6 +485,7 @@ asynStatus dtacq_adc::applyBitMask(NDArray *pFrame) {
     }
 }
 
+/* Helper function to calculate the number of elements in an NDArray */
 int dtacq_adc::nElements(NDArray *pFrame) {
     if (pFrame == NULL) return 0;
     else {
