@@ -91,37 +91,41 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
     size_t nread = 0;
     int eomReason, connected, dType, nBytes, totalRead = 0;
     status = pasynManager->isConnected(this->commonDataIPPort, &connected);
-    if (connected) {
-        getIntegerParam(NDDataType, &dType);
-        if (dType == NDInt16)
-            nBytes = 2;
-        else
-            nBytes = 4;
-        while (totalRead < n_samples * n_channels * nBytes) {
-            status = pasynOctetSyncIO->read(
-                this->octetDataIPPort,
-                (char *) this->pRaw->pData + totalRead,
-                n_samples*n_channels*nBytes - totalRead,
-                5.0, &nread, &eomReason);
-            if (nread == 0) {
-                asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                          "No data read; data port error: %s\n",
-                          this->commonDataIPPort->errorMessage);
-                status = asynError;
-                break;
-            }
-            totalRead += nread;
-        }
-        /* Mask out the last 8 bits if we have 24bit data in a 32bit word */
-        if (nBytes == 4) status = applyBitMask(this->pRaw);
+    if (!status) {
+	if (connected) {
+	    getIntegerParam(NDDataType, &dType);
+	    if (dType == NDInt16)
+		nBytes = 2;
+	    else
+		nBytes = 4;
+	    while (totalRead < n_samples * n_channels * nBytes) {
+		status = pasynOctetSyncIO->read(
+		    this->octetDataIPPort,
+		    (char *) this->pRaw->pData + totalRead,
+		    n_samples*n_channels*nBytes - totalRead,
+		    5.0, &nread, &eomReason);
+		if (nread == 0) {
+		    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+			      "No data read; data port error: %s\n",
+			      this->commonDataIPPort->errorMessage);
+		    status = asynError;
+		    break;
+		}
+		totalRead += nread;
+	    }
+	    /* Mask out the last 8 bits if we have 24bit data in a 32bit word */
+	    if (nBytes == 4) status = applyBitMask(this->pRaw);
 
-        if (status != asynSuccess) {
-            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                      "N read: %zu %d %d\n", nread, eomReason, status);
-            asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-                      "Data port error: %s\n",
-                      this->commonDataIPPort->errorMessage);
-        }
+	    if (status != asynSuccess) {
+		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+			  "N read: %zu %d %d\n", nread, eomReason, status);
+		asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+			  "Data port error: %s\n",
+			  this->commonDataIPPort->errorMessage);
+	    }
+	} else {
+	    status = asynDisconnected;
+	}
     }
     return status;
 }
@@ -320,7 +324,14 @@ void dtacq_adc::dtacqTask()
         /* Update the image */
         status = computeImage();
 
-        if (status) continue;
+        if (status) { 
+	    if (status == asynDisconnected)
+		setIntegerParam(ADStatus, ADStatusDisconnected);
+	    else
+		setIntegerParam(ADStatus, ADStatusError);
+	    callParamCallbacks();
+	    continue;
+	}
         if (!acquire) continue;
 
         setIntegerParam(ADStatus, ADStatusReadout);
