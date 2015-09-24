@@ -569,10 +569,15 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             this->setDeviceParameter("data32", "0");
         else
             this->setDeviceParameter("data32", "1");
+	
+	int gainSel = 0;
+	getIntegerParam(gain, &gainSel);
+	status = calculateConversionFactor(gainSel, &count2volt);
     } else if (function == gain) {
         // Horrible but convenient misuse of variables command and commandLen...
         commandLen = sprintf(command, "%d", value);
         this->setDeviceParameter("gain", command);
+	setIntegerParam(gain, value);
         status = calculateConversionFactor(value, &count2volt);
     } else {
         /* If this parameter belongs to a base class call its method */
