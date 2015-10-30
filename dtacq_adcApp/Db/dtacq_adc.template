@@ -13,6 +13,8 @@
 # This associates the template with an edm screen
 # % gui, $(PORT), edmtab, dtacq_adc.edl, P=$(P),R=$(R)
 
+include "ADBase.template"
+
 ###################################################################
 #  These records expose the gain control (voltage range)
 ###################################################################
