@@ -60,7 +60,7 @@ private:
     asynStatus setSiteInformation(const epicsInt32 value);
     asynStatus getDeviceParameter(const char *parameter, char *readBuffer,
                                   int bufferLen);
-    asynStatus setDeviceParameter(const char *parameter, const char *value);
+    asynStatus setDeviceParameter(const char *parameter, const char *value, const char *site=NULL);
     void closeSocket();
     /* Data processing functions */
     asynStatus calculateConversionFactor(int gainSelection, double *factor);
@@ -196,7 +196,7 @@ int dtacq_adc::computeImage()
         sizeY = maxSizeY - minY;
         status |= setIntegerParam(ADSizeY, sizeY);
     }
-    
+
     if (resetImage) {
     /* Free the previous raw buffer */
         if (this->pRaw) this->pRaw->release();
@@ -324,7 +324,7 @@ void dtacq_adc::dtacqTask()
         /* Update the image */
         status = computeImage();
 
-        if (status) { 
+        if (status) {
 	    if (status == asynDisconnected)
 		setIntegerParam(ADStatus, ADStatusDisconnected);
 	    else
@@ -409,16 +409,19 @@ asynStatus dtacq_adc::setSiteInformation(const epicsInt32 value)
 }
 
 /* Send a command to the controls port (in native notation) */
-asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *value)
+asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *value, const char *site)
 {
     size_t commandLen;
     size_t nbytesOut;
     char command[bufferSize];
     int status = asynSuccess;
-    epicsInt32 site;
-    status = getIntegerParam(this->masterSite, &site);
-    commandLen = sprintf(command, "set.site %d %s %s\n", site, parameter,
-                         value);
+    if (site==NULL) {
+        epicsInt32 master;
+        status = getIntegerParam(this->masterSite, &master);
+        commandLen = sprintf(command, "set.site %d %s %s\n", master, parameter, value);
+    } else {
+        commandLen = sprintf(command, "set.site %s %s %s\n", site, parameter, value);
+    }
     asynPrint(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, "setDevParam: %s\n",
               command);
     status |= pasynOctetSyncIO->write(controlIPPort, (const char*) command,
@@ -569,16 +572,21 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             this->setDeviceParameter("data32", "0");
         else
             this->setDeviceParameter("data32", "1");
-	
-	int gainSel = 0;
-	getIntegerParam(gain, &gainSel);
-	status = calculateConversionFactor(gainSel, &count2volt);
+
+        int gainSel = 0;
+        getIntegerParam(gain, &gainSel);
+        status = calculateConversionFactor(gainSel, &count2volt);
     } else if (function == gain) {
-        // Horrible but convenient misuse of variables command and commandLen...
-        commandLen = sprintf(command, "%d", value);
-        this->setDeviceParameter("gain", command);
-	setIntegerParam(gain, value);
-        status = calculateConversionFactor(value, &count2volt);
+        // Only do something if the gain is actually adjustable in software
+        if (this->moduleType != 1) {
+            // Gain is set on the carrier site, which propagates it across all modules
+            char site = '0';
+            // Horrible but convenient misuse of variables command and commandLen...
+            commandLen = sprintf(command, "%d", value);
+            this->setDeviceParameter("gain", command, &site);
+            setIntegerParam(gain, value);
+            status = calculateConversionFactor(value, &count2volt);
+        }
     } else {
         /* If this parameter belongs to a base class call its method */
         if (function < DTACQ_FIRST_PARAMETER)
@@ -650,7 +658,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
 {
     int status = asynSuccess;
     const char *functionName = "dtacq_adc";
-//this->dataHostInfo = 
+    //this->dataHostInfo =
     strncpy(this->dataHostInfo, dataHostInfo, STRINGLEN);
     strncpy(this->dataPortName, dataPortName, STRINGLEN);
     /* Create the epicsEvents for signaling to the simulate task
@@ -712,6 +720,9 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
             driverName, functionName);
         return;
     }
+    //TODO: Restrict the gain menu for this->moduleType == 1 (ACQ420FMC) to what's actually set,
+    //TODO: i.e. override the entry for menu selection 0 to an appropriate string and delete all
+    //TODO: the others.
     /* Initialise conversion factor to the same default selection as gain */
     count2volt = 0;
     status = calculateConversionFactor(0, &count2volt);
