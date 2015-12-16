@@ -15,6 +15,8 @@
 #include <vector>
 #include <stdexcept>
 
+#include <iostream>
+
 #include <epicsTime.h>
 #include <epicsThread.h>
 #include <epicsEvent.h>
@@ -25,12 +27,18 @@
 #include <cantProceed.h>
 #include <iocsh.h>
 
+#include "db_access.h"
+#include "initHooks.h"
+
 #include "ADDriver.h"
 #include <epicsExport.h>
 
 #define STRINGLEN 128
 
 asynCommon *pasynCommon;
+
+/* Forward declaration of post-init hook (used in constructor) */
+extern "C" int dtacq_adcPostInitConfig();
 
 const size_t bufferSize = 128;
 static const char *driverName = "dtacq_adc";
@@ -40,6 +48,7 @@ public:
               const char *controlPortName, int nChannels, int nSamples,
               int maxBuffers, size_t maxMemory, const char *dataHostInfo,
               int priority, int stackSize);
+    virtual int postInitConfig();
     /* These are the methods that we override from ADDriver */
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
     virtual void report(FILE *fp, int details);
@@ -82,6 +91,11 @@ private:
     double count2volt;
     /* Mask to zero out the site/channel information in 24bit data */
     static const int bitMask = 0xffffff00;
+    /* Override values for ACQ420FMC gain options */
+    static const int ngvals = 4;
+    char *gnames[ngvals];
+    int gvals[ngvals];
+    int gseverities[ngvals];
 };
 
 /* Reads a raw frame from the data stream on port 4210 */
@@ -573,13 +587,16 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
         else
             this->setDeviceParameter("data32", "1");
 
-        int gainSel = 0;
-        getIntegerParam(gain, &gainSel);
-        status = calculateConversionFactor(gainSel, &count2volt);
+        /* Don't call calculateConversionFactor(...) before the ranges have been initialised */
+        if (this->ranges.size() > 0) {
+            int gainSel = -1;
+            getIntegerParam(gain, &gainSel);
+            status = calculateConversionFactor(gainSel, &count2volt);
+        }
     } else if (function == gain) {
-        // Only do something if the gain is actually adjustable in software
+        /* Only do something if the gain is actually adjustable in software */
         if (this->moduleType != 1) {
-            // Gain is set on the carrier site, which propagates it across all modules
+            /* Gain is set on the carrier site, which propagates it across all modules */
             char site = '0';
             // Horrible but convenient misuse of variables command and commandLen...
             commandLen = sprintf(command, "%d", value);
@@ -624,6 +641,55 @@ void dtacq_adc::report(FILE *fp, int details)
     }
     /* Invoke the base class method */
     ADDriver::report(fp, details);
+}
+
+int dtacq_adc::postInitConfig()
+{
+    const char *functionName = "postInitConfig";
+    std::cout << "postInitConfig" << std::endl;
+    int status;
+
+    /* Get the module type for the gain adjustments */
+    char rbuf[2];
+    rbuf[0] = '\0';
+    status = this->getDeviceParameter("module_type", rbuf, 2);
+    this->moduleType = atoi(rbuf);
+    if (status) {
+        printf("%s:%s failed to retrieve parameter module_type from the device\n",
+            driverName, functionName);
+    }
+    /* All three DLS-supported cards happen to have the same selection of voltage ranges */
+    std::vector<double> gains;
+    gains.push_back(10.0);
+    gains.push_back(5.0);
+    gains.push_back(2.5);
+    gains.push_back(1.25);
+    /* Initialise the map of voltages ranges (key value is the module type as defined by the manufacturer) */
+    ranges.insert(std::pair<int, std::vector<double> >(1, gains)); // ACQ420FMC
+    ranges.insert(std::pair<int, std::vector<double> >(5, gains)); // ACQ425ELF
+    ranges.insert(std::pair<int, std::vector<double> >(6, gains)); // ACQ437ELF
+    /* Initialise conversion factor to the same selection as gain */
+    int gainSel = -1;
+    count2volt = 0;
+    getIntegerParam(gain, &gainSel);
+    status |= calculateConversionFactor(gainSel, &count2volt);
+    if (status) {
+        printf("%s:%s failed to calculate the voltage range conversion factor, count2volt=%f\n",
+            driverName, functionName, count2volt);
+    }
+    /* Blank out the gain selection menu for an ACQ420FMC */
+    //TODO: fix this
+    /*if (this->moduleType == 1) {
+        for (int i = 0; i < this->ngvals; ++i) {
+	        this->gnames[i] = (char *)calloc(MAX_ENUM_STRING_SIZE, sizeof(char));
+            epicsSnprintf(this->gnames[i], MAX_ENUM_STRING_SIZE, "%c", '-');
+            this->gvals[i] = i;
+            this->gseverities[i] = 0;
+        }
+        status |= this->doCallbacksEnum(this->gnames, this->gvals, this->gseverities, this->ngvals, gain, 0);
+    }*/
+
+    return status;
 }
 
 /* Constructor for dtacq_adc; most parameters are simply passed to
@@ -684,18 +750,7 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     status |= setIntegerParam(ADNumImages, 100);
     if (status) {
         printf("%s: unable to set camera parameters\n", functionName);
-        return;
     }
-    /* All three DLS-supported cards happen to have the same selection of voltage ranges */
-    std::vector<double> gains;
-    gains.push_back(10.0);
-    gains.push_back(5.0);
-    gains.push_back(2.5);
-    gains.push_back(1.25);
-    /* Initialise the map of voltages ranges (key value is the module type as defined by the manufacturer) */
-    ranges.insert(std::pair<int, std::vector<double> >(1, gains)); // ACQ420FMC
-    ranges.insert(std::pair<int, std::vector<double> >(5, gains)); // ACQ425ELF
-    ranges.insert(std::pair<int, std::vector<double> >(6, gains)); // ACQ437ELF
     /* Create the thread that updates the images */
     status = (epicsThreadCreate("D-TACQTask",
                                 epicsThreadPriorityMedium,
@@ -705,41 +760,29 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName,
     if (status) {
         printf("%s:%s epicsThreadCreate failure for image task\n",
             driverName, functionName);
-        return;
     }
     /* Connect to the ip port */
-    pasynOctetSyncIO->connect(controlPortName, -1, &this->controlIPPort, NULL);
-    drvAsynIPPortConfigure(this->dataPortName, this->dataHostInfo, 0, 1, 0);
-    /* Get the module type for the gain adjustments */
-    char rbuf[2];
-    rbuf[0] = '\0';
-    status = this->getDeviceParameter("module_type", rbuf, 2);
-    this->moduleType = atoi(rbuf);
-    if (status) {
-        printf("%s:%s failed to retrieve parameter module_type from the device\n",
-            driverName, functionName);
-        return;
-    }
-    //TODO: Restrict the gain menu for this->moduleType == 1 (ACQ420FMC) to what's actually set,
-    //TODO: i.e. override the entry for menu selection 0 to an appropriate string and delete all
-    //TODO: the others.
-    /* Initialise conversion factor to the same default selection as gain */
-    count2volt = 0;
-    status = calculateConversionFactor(0, &count2volt);
-    if (status) {
-        printf("%s:%s failed to calculate the voltage range conversion factor, count2volt=%f\n",
-            driverName, functionName, count2volt);
-    }
+    status = pasynOctetSyncIO->connect(controlPortName, -1, &this->controlIPPort, NULL);
+    if (status)
+        printf("%s:%s failed to connect asyn to control port\n", driverName, functionName);
+    status = drvAsynIPPortConfigure(this->dataPortName, this->dataHostInfo, 0, 1, 0);
+    if (status)
+        printf("%s:%s failed to configure data port\n", driverName, functionName);
+    /* Initialise the module type to a non-existent one */
+    this->moduleType = 0;
+    dtacq_adcPostInitConfig();
 }
 
 /* Configuration command, called directly or from iocsh */
+dtacq_adc* adc = NULL;
 extern "C" int dtacq_adcConfig(const char *portName, const char *dataPortName,
                                const char *controlPortName, int nChannels,
                                int nSamples, int maxBuffers,
                                int maxMemory, const char *dataHostInfo,
                                int priority, int stackSize)
 {
-    new dtacq_adc(portName, dataPortName, controlPortName, nChannels, nSamples,
+    if (adc != NULL) delete adc;
+    adc = new dtacq_adc(portName, dataPortName, controlPortName, nChannels, nSamples,
                   (maxBuffers < 0) ? 0 : maxBuffers,
                   (maxMemory < 0) ? 0 : maxMemory, dataHostInfo,
                   priority, stackSize);
@@ -778,9 +821,37 @@ static void configdtacq_adcCallFunc(const iocshArgBuf *args)
                     args[8].ival, args[9].ival);
 }
 
+/* Post-init configuration command for gain settings */
+static void dtacq_adcPostInit(initHookState state)
+{
+    switch (state) {
+        case initHookAfterIocRunning:
+            printf("processing case initHookAfterIocRunning\n");
+            if (adc != NULL) adc->postInitConfig();
+            break;
+        default:
+            break;
+    }
+}
+
+extern "C" int dtacq_adcPostInitConfig()
+{
+    return(initHookRegister(dtacq_adcPostInit));
+}
+
+/* Code for iocsh registration */
+static const iocshArg * const dtacq_adcPostInitConfigArgs[] = {};
+static const iocshFuncDef postinitconfigdtacq_adc = {"dtacq_adcPostInitConfig", 0, dtacq_adcPostInitConfigArgs};
+static void postinitconfigdtacq_adcCallFunc(const iocshArgBuf *args)
+{
+    dtacq_adcPostInitConfig();
+}
+
+/* Register functions in iocsh */
 static void dtacq_adcRegister(void)
 {
     iocshRegister(&configdtacq_adc, configdtacq_adcCallFunc);
+    iocshRegister(&postinitconfigdtacq_adc, postinitconfigdtacq_adcCallFunc);
 }
 
 extern "C" {
