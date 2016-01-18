@@ -13,7 +13,7 @@ class dtacq_adc(AsynPort):
     Dependencies = (ADCore, Asyn)
     UniqueName = "PORT"
     _SpecificTemplate = _dtacq_adc
-    def __init__(self, DATA_IP, CONTROL_IP, NCHANNELS=4, NSAMPLES=1000000,
+    def __init__(self, DATA_IP, CONTROL_IP, MODULE_TYPE, NCHANNELS=4, NSAMPLES=1000000,
                  BUFFERS=50, MEMORY=0, **args):
         self.controlPort = AsynIP(CONTROL_IP, name = args["PORT"] + ".control")
         # Init the superclass (_ADBase)
@@ -28,6 +28,7 @@ class dtacq_adc(AsynPort):
         DATA_IP = Simple('Address and data port number', str),
         CONTROL_IP = Simple('Address and control port number', str),
         NCHANNELS = Simple('Number of channels on the ADC', int),
+        MODULE_TYPE = Simple('1: ACQ420FMC, 5: ACQ425ELF, 6: ACQ437ELF'),
         NSAMPLES = Simple('Number of samples from the ADC to create an NDArray',
                           int),
         BUFFERS = Simple('Maximum number of NDArray buffers to be created for '
@@ -41,10 +42,10 @@ class dtacq_adc(AsynPort):
 
     def Initialise(self):
         print(
-'''# dtacq_adcConfig(portName, dataPortName, controlPortName,
-#                 nChannels, nSamples, maxBuffers, maxMemory,
-#                 dataHostInfo)''')
-        print('''dtacq_adcConfig("%s", "%s.data", \
-"%s.control", %d, %d, \
-%d, %d, "%s")''' % (self.__dict__["args"]["PORT"], self.__dict__["args"]["PORT"], self.__dict__["args"]["PORT"], self.__dict__["NCHANNELS"], self.__dict__["NSAMPLES"], self.__dict__["BUFFERS"], self.__dict__["MEMORY"], self.__dict__["DATA_IP"]))
+'''# dtacq_adcConfig(portName, dataPortName, controlPortName, nChannels,
+#                  nSamples, maxBuffers, maxMemory, dataHostInfo)''')
+        print('''dtacq_adcConfig("%s", "%s.data", "%s.control", %d, %d, %d, %d, %d, "%s")''' \
+              % (self.__dict__["args"]["PORT"], self.__dict__["args"]["PORT"], self.__dict__["args"]["PORT"], \
+                 self.__dict__["NCHANNELS"], self.__dict__["MODULE_TYPE"], self.__dict__["NSAMPLES"], self.__dict__["BUFFERS"], \
+                 self.__dict__["MEMORY"], self.__dict__["DATA_IP"]))
 
