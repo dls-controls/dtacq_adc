@@ -28,7 +28,7 @@ class dtacq_adc(AsynPort):
         DATA_IP = Simple('Address and data port number', str),
         CONTROL_IP = Simple('Address and control port number', str),
         NCHANNELS = Simple('Number of channels on the ADC', int),
-        MODULE_TYPE = Simple('1: ACQ420FMC, 5: ACQ425ELF, 6: ACQ437ELF'),
+        MODULE_TYPE = Simple('1: ACQ420FMC, 5: ACQ425ELF, 6: ACQ437ELF', int),
         NSAMPLES = Simple('Number of samples from the ADC to create an NDArray',
                           int),
         BUFFERS = Simple('Maximum number of NDArray buffers to be created for '
