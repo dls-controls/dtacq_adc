@@ -676,18 +676,18 @@ int dtacq_adc::postInitConfig()
    reasonable default values for parameters defined in this class,
    asynNDArrayDriver and ADDriver.
    \param[in] portName The name of the asyn port driver to be created.
-   \param[in] maxSizeX The maximum X dimension of the images that this
-                       driver can create.
-   \param[in] maxSizeY The maximum Y dimension of the images that this
-                       driver can create.
-   \param[in] dataType The initial data type (NDDataType_t) of the images
-                       that this driver will create.
+   \param[in] dataPortName data port 
+   \param[in] controlPortName control port
+   \param[in] nChannels number of channels
+   \param[in] moduleType
+   \param[in] nSamples number of samples
    \param[in] maxBuffers The maximum number of NDArray buffers that the
                          NDArrayPool for this driver is allowed to allocate.
                          Set this to -1 to allow an unlimited number of buffers.
    \param[in] maxMemory The maximum amount of memory that the NDArrayPool
                         for this driver is allowed to allocate. Set this to
                         -1 to allow an unlimited amount of memory.
+   \param[in] dataHostInfo
    \param[in] priority The thread priority for the asyn port driver thread
                        if ASYN_CANBLOCK is set in asynFlags.
    \param[in] stackSize The stack size for the asyn port driver thread if
