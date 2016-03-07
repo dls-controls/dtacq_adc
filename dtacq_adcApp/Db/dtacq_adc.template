@@ -153,3 +153,38 @@ record(mbbi, "$(P)$(R)DataType_RBV")
     field(SVST, "")
     field(SVVL, "")
 }
+
+
+###################################################################
+#  Enable/disable sample count checking
+###################################################################
+
+record(bo, "$(P)$(R)ENABLE_HEADER")
+{
+    field(DTYP, "asynInt32")
+    field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))USE_SAMPLE_COUNT")
+    field(ZNAM, "Off")
+    field(ONAM, "On")
+}
+
+record(bi, "$(P)$(R)ENABLE_HEADER_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(SCAN, "I/O Intr")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))USE_SAMPLE_COUNT")
+    field(ZNAM, "Off")
+    field(ONAM, "On")
+}
+
+###################################################################
+#  Monitor flag for data loss detection
+###################################################################
+
+record(bi, "$(P)$(R)BAD_SAMPLES_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(SCAN, "I/O Intr")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))BAD_ARRAY")
+    field(ZNAM, "No")
+    field(ONAM, "Yes")
+}
