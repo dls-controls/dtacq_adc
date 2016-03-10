@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 784
-y 118
+x 788
+y 170
 w 390
 h 820
 font "arial-bold-r-12.0"
@@ -1601,32 +1601,51 @@ minor 1
 release 1
 x 15
 y 335
-w 95
+w 70
 h 30
 font "arial-bold-r-12.0"
 fgColor index 14
 bgColor index 3
 useDisplayBg
 value {
-  "Missing data"
+  "Bad frames"
 }
 endObjectProperties
 
-# (Byte)
-object ByteClass
+# (Textupdate)
+object TextupdateClass
 beginObjectProperties
-major 4
+major 10
 minor 0
 release 0
-x 145
+x 130
 y 340
-w 20
+w 40
 h 20
 controlPv "$(P)$(R)BAD_SAMPLES_RBV"
-lineColor index 14
-onColor index 20
-offColor index 24
-lineWidth 2
-numBits 1
+fgColor index 16
+fgAlarm
+bgColor index 10
+fill
+font "arial-bold-r-12.0"
+fontAlign "center"
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 90
+y 340
+w 35
+h 20
+controlPv "$(P)$(R)BAD_SAMPLES"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
 endObjectProperties
 

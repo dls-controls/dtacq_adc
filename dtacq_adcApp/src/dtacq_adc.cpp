@@ -63,22 +63,19 @@ public:
     int masterSite;
     int gain;
     int channels;
-    // ###TODO:
-    // Add scratchpad toggle
-    // Add error indicator
     int enableScratchpad;
-    int badFrame;
+    int badFrames;
     //
-#define DTACQ_NUM_PARAMETERS ((int) (&badFrame - &DTACQ_FIRST_PARAMETER + 1))
+#define DTACQ_NUM_PARAMETERS ((int) (&badFrames - &DTACQ_FIRST_PARAMETER + 1))
 
 private:
     /* Frame handling functions */
     int readArray(int n_samples, int n_channels);
     int computeImage();
     /* Connection handling and device communication functions */
-    asynStatus setSiteInformation(const epicsInt32 value);
+    asynStatus getSiteInformation();
     asynStatus getDeviceParameter(const char *parameter, char *readBuffer,
-                                  int bufferLen);
+                                  int bufferLen, const char *site=NULL);
     asynStatus setDeviceParameter(const char *parameter, const char *value, const char *site=NULL);
     void closeSocket();
     /* Data processing functions */
@@ -107,18 +104,12 @@ private:
     char *gnames[ngvals];
     int gvals[ngvals];
     int gseverities[ngvals];
-    // ###TODO: Add "Got good data" flag
-    //          Add sample counter
-    // ###TODO: Data type - needs to be large enough that we don't ever need to worry about integer overflow
-    //          - on dtacq side this is a 32 bit int, so make this a long for now - should probably actually use a
-    //          fixed width variable.
     bool cleanSampleSeen;
+    // 64 bit so that ADC will overflow before we do (since it stores this as a 32 bit int)
     uint64_t sampleCount;
 };
 
 /* Reads a raw frame from the data stream on port 4210 */
-// ###TODO: Need to handle the changed array size for a spad-enabled array - will add an extra 32 bit word on the end of received array.
-// Need to allocate space for this, and need to not mask it out (since the whole 32 bits is valid data).
 int dtacq_adc::readArray(int n_samples, int n_channels)
 {
     int status = asynSuccess;
@@ -134,8 +125,8 @@ int dtacq_adc::readArray(int n_samples, int n_channels)
 	    else
 		nBytes = 4;
 
-	    // ###TODO: Won't this fail if we're doing a slow read? Will timeout after 5s,
-	    // do we handle this cleanly?
+	    // Note timeout will not cause problems if we are taking an acquisition lasting longer than 5s - in this case so long as we acquired some
+	    // data, we'll just queue up another read until we're done.
 	    while (totalRead < n_samples * (n_channels * nBytes)) {
 		status = pasynOctetSyncIO->read(
 		    this->octetDataIPPort,
@@ -257,18 +248,18 @@ int dtacq_adc::computeImage()
         }
     }
     this->unlock();
-    // ###TODO: Note read array does not pad the array to make room for the sample header, so we need to make sure it is included in sizeY at this point.
+
     status = readArray(sizeY, sizeX);
     this->lock();
 
     if (status) {
         return(status);
     } else {
-	// ###TODO: add scratchpad checking here.
 	if (spad) {
-	    // Get buffer to data
 	    // Get pointer to sample count
 	    uint32_t *sampleHeader;
+	    // Mark the frame as clean ready to search for inconsistencies.
+	    int dataInconsistent = 0;
 
 	    for (int i = 0; i < sizeY; i++) {
 		// Sample count is always stored in the last 32 bits of each sample
@@ -279,10 +270,8 @@ int dtacq_adc::computeImage()
 		// on the stored data type), then convert to a 32 bit integer pointer to retrieve the actual data.
 	      uint8_t *intermediate = ((uint8_t *)this->pRaw->pData) + i*sizeX*nBytes + (sizeX*nBytes - 4);
 	      sampleHeader = (uint32_t *)intermediate;
-	      printf ("Sample count: %d\n", *sampleHeader);
-	      // For each sample
+	      // If we have a sample count stored from the last sample, check this sample is the one we expect.
 	      if (cleanSampleSeen) {
-		  // Is the data arriving in order?
 		  if (*sampleHeader == sampleCount) {
 		      // Handle integer overflow on the dtacq side (our sample count var needs to be > 32 bits for this reason)
 		      if (sampleCount == 4294967295)
@@ -291,19 +280,24 @@ int dtacq_adc::computeImage()
 			sampleCount++;
 		  } else {
 		      cleanSampleSeen = false;
-		      // ###TODO: For now all we do is set a param flag; later should actually do something here - set some metadata on the output array,
-		      // or optionally refuse to output the array at all.
-		      status |= setIntegerParam(badFrame, 1);
+		      dataInconsistent = 1;
 		  }
 	      } else {
+		  // If we haven't stored a sample count yet, store this one.
 		  cleanSampleSeen = true;
 		  if ((*sampleHeader) == 4294967295)
 		    sampleCount = 0;
 		  else
 		    sampleCount = *sampleHeader + 1;
-
 	      }
+	    }
 
+	    if (dataInconsistent) {
+		int badFrameCount;
+		getIntegerParam(badFrames, &badFrameCount);
+		badFrameCount++;
+		setIntegerParam(badFrames, badFrameCount);
+		return(asynError);
 	    }
 	}
 
@@ -480,19 +474,38 @@ void dtacq_adc::dtacqTask()
     }
 }
 
-asynStatus dtacq_adc::setSiteInformation(const epicsInt32 value)
+asynStatus dtacq_adc::getSiteInformation()
 {
     int eomReason;
     size_t commandLen;
     size_t nbytesIn, nbytesOut;
     char command[bufferSize], readBuffer[bufferSize];
     int status = asynSuccess;
-    commandLen = sprintf(command, "get.site %d module_name\n", value);
+    epicsInt32 master;
+    status = getIntegerParam(this->masterSite, &master);
+    commandLen = sprintf(command, "get.site %d module_type\n", master);
     pasynOctetSyncIO->writeRead(controlIPPort, (const char*)command, commandLen,
                                 readBuffer, bufferSize, 2.0,
                                 &nbytesIn, &nbytesOut, &eomReason);
-    status = setStringParam(ADModel, readBuffer);
-    commandLen = sprintf(command, "get.site %d MANUFACTURER\n", value);
+    int moduleType;
+    sscanf(readBuffer, "%d", &moduleType);
+    switch (moduleType)
+    {
+      case 1:
+	status = setStringParam(ADModel, "acq420fmc");
+	break;
+      case 5:
+	status = setStringParam(ADModel, "acq425elf");
+	break;
+      case 6:
+	status = setStringParam(ADModel, "acq437elf");
+	break;
+      default:
+	status = setStringParam(ADModel, "unknown");
+	break;
+    }
+
+    commandLen = sprintf(command, "get.site %d MANUFACTURER\n", master);
     pasynOctetSyncIO->writeRead(controlIPPort, (const char*)command, commandLen,
                                 readBuffer, bufferSize, 2.0,
                                 &nbytesIn, &nbytesOut, &eomReason);
@@ -523,16 +536,21 @@ asynStatus dtacq_adc::setDeviceParameter(const char *parameter, const char *valu
 
 /* Read a device parameter from the controls port (in native notation) */
 asynStatus dtacq_adc::getDeviceParameter(const char *parameter,
-                                         char *readBuffer, int bufferLen)
+                                         char *readBuffer, int bufferLen, const char *site)
 {
     int eomReason;
     size_t commandLen;
     size_t nbytesIn, nbytesOut;
     char command[bufferSize];
     int status = asynSuccess;
-    epicsInt32 site;
-    status = getIntegerParam(this->masterSite, &site);
-    commandLen = sprintf(command, "get.site %d %s\n", site, parameter);
+    if (site==NULL) {
+        epicsInt32 master;
+        status = getIntegerParam(this->masterSite, &master);
+        commandLen = sprintf(command, "get.site %d %s\n", master, parameter);
+    } else {
+	commandLen = sprintf(command, "get.site %s %s\n", site, parameter);
+    }
+
     std::cout << "bufferLen = " << bufferLen << std::endl;
     std::cout << "command = " << command << std::endl;
     asynPrint(this->pasynUserSelf, ASYN_TRACEIO_DRIVER, "getDevParam: %s\n",
@@ -558,7 +576,7 @@ asynStatus dtacq_adc::calculateConversionFactor(int gainSelection, double *facto
         *factor = outRange / inRange;
         status = asynSuccess;
     } catch (const std::out_of_range& oor) {
-        printf("%s:%s caught out_of_range exception, received moduleType=%d, gainSelection=%d\n",
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s caught out_of_range exception, received moduleType=%d, gainSelection=%d\n",
             driverName, functionName, moduleType, gainSelection);
         status = asynError;
     }
@@ -575,7 +593,7 @@ asynStatus dtacq_adc::calculateDataSize()
   getIntegerParam(channels, &nChannels);
   getIntegerParam(enableScratchpad, &spad);
   getIntegerParam(NDDataType, &dType);
-  printf("nChannels %d, spad %d, datatype %d\n", nChannels, spad, dType);
+  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s nChannels %d, spad %d, datatype %d\n", driverName, functionName, nChannels, spad, dType);
   if (spad && dType == 2) {
       status |= setIntegerParam(ADMaxSizeX, nChannels + 2);
       status |= setIntegerParam(ADSizeX, nChannels + 2);
@@ -598,7 +616,7 @@ asynStatus dtacq_adc::calculateDataSize()
 asynStatus dtacq_adc::applyScaling(NDArray *pFrame) {
     const char *functionName = "applyScaling";
     if (pFrame == NULL) {
-        printf("%s:%s unable to apply scaling, pFrame is NULL\n", driverName, functionName);
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s unable to apply scaling, pFrame is NULL\n", driverName, functionName);
         return asynError;
     } else {
         double *pDoubles = (double *)(pFrame->pData);
@@ -613,7 +631,7 @@ asynStatus dtacq_adc::applyScaling(NDArray *pFrame) {
 asynStatus dtacq_adc::applyBitMask(NDArray *pFrame) {
     const char *functionName = "applyBitMask";
     if (pFrame == NULL) {
-        printf("%s:%s unable to apply bit mask, pFrame is NULL\n", driverName, functionName);
+	asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s unable to apply bit mask, pFrame is NULL\n", driverName, functionName);
         return asynError;
     } else {
         int *pInts = (int *)(pFrame->pData);
@@ -632,10 +650,6 @@ int dtacq_adc::nElements(NDArray *pFrame) {
     }
 }
 
-// ### TODO: Should handle single and multi acquisition reset of sample count
-// ### TODO: Add scratchpad enable command, and have it write immediately to ADC if toggled and connected.
-// This needs to update ADMaxSizeX, ADSizeX and ADArraySizeX as well.
-// We also need to make sure we update these if data type is changed.
 /* Called when asyn clients call pasynInt32->write().
    This function performs actions for some parameters, including ADAcquire, ADColorMode, etc.
    For all parameters it sets the value in the parameter library and calls any registered callbacks..
@@ -653,7 +667,7 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
     /* Ensure that ADStatus is set correctly before we set ADAcquire.*/
     getIntegerParam(ADStatus, &adstatus);
     getIntegerParam(ADAcquire, &acquiring);
-    // ###TODO: If we have just started acquiring the sample count will reset, so we should set it to zero.
+
     if (function == ADAcquire) {
         if (value && !acquiring) {
             setStringParam(ADStatusMessage, "Acquiring data");
@@ -681,8 +695,12 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             sampleCount = 0;
             cleanSampleSeen = false;
 
+            // ###TODO: Really we should set up a connection callback via asynExceptionCallback to call this whenever we connect.
+	    getSiteInformation();
+
             getStringParam(aggregationSites, STRINGLEN, sites);
             commandLen = sprintf(command, "run0 %s\n", sites);
+
             pasynOctetSyncIO->write(controlIPPort, command, commandLen, 2,
                                     &nbytesOut);
             pasynOctetSyncIO->connect(this->dataPortName, -1,
@@ -699,13 +717,45 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
         }
     } else if (function == masterSite) {
         setIntegerParam(masterSite, value);
-        setSiteInformation(value);
+        getSiteInformation();
     } else if (function == NDDataType) {
-        if (value == 2)
+	// We can't easily detect the point in the data stream where the data size changes, so to keep things consistent for now we stop
+	// acquisition every time we change this.
+	if (acquiring) {
+	    setIntegerParam(ADAcquire, 0);
+	    acquireStopEvent->signal();
+	    this->closeSocket();
+	}
+
+	// First try to set the data type on the device.
+        if (value == NDInt16)
             this->setDeviceParameter("data32", "0");
         else
             this->setDeviceParameter("data32", "1");
 
+        // Now read back what the device thinks its data type is now and update our own data type to match (regardless of whether the change we
+        // made was successful; at least for the ACQ437 trying to change the data type from int32 to int16 fails outright).
+        char readBuffer[bufferSize];
+
+        this->getDeviceParameter("data32", readBuffer, bufferSize);
+
+        int dType;
+        if (sscanf(readBuffer, "%d", &dType) == 1) {
+            if (dType==0) {
+        	setIntegerParam(NDDataType, NDInt16);
+        	if (value != NDInt16) {
+        	    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:writeInt32 Failed to set data type to NDInt16: %s\n", driverName, readBuffer);
+        	    status = asynError;
+        	}
+            } else if (dType==1) {
+        	setIntegerParam(NDDataType, NDInt32);
+        	if (value != NDInt32) {
+        	    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:writeInt32 Failed to set data type to NDInt32: %s\n", driverName, readBuffer);
+        	    status = asynError;
+        	}
+            }
+        }
+        // Update our conversion factor and data size since these are dependent on the data type.
         int gainSel = -1;
         getIntegerParam(gain, &gainSel);
         status = calculateConversionFactor(gainSel, &count2volt);
@@ -723,27 +773,36 @@ asynStatus dtacq_adc::writeInt32(asynUser *pasynUser, epicsInt32 value)
             status = calculateConversionFactor(value, &count2volt);
         }
     } else if (function == enableScratchpad) {
+
+	// We can't easily detect the point in the data stream where the sample header is added/removed, so to keep things consistent for now we stop
+	// acquisition every time we change this.
+	if (acquiring) {
+	    setIntegerParam(ADAcquire, 0);
+	    acquireStopEvent->signal();
+	    this->closeSocket();
+	}
 	// Command signature is "<enable/disable>,<# words>,<DIX>".
 	// # words can be up to 8 but we only care about the sample count which is in word 1.
 	// DIX seems to be used for digital inputs if the board has these, we don't care about this.
+
 	sprintf(command, "%d,1,0", value);
 	status = this->setDeviceParameter("spad", command, "0");
 
-	// ###TODO: Really we should interrogate the unit to check the change has actually been written, but
-	// this means fixing getDeviceParameter so can wait until the next commit.
-	//char readBuffer[bufferSize];
+	// Now interrogate the unit to confirm the change has been written. Update our internal state only if the
+	// write was successful.
+	char readBuffer[bufferSize];
 
-	//this->getDeviceParameter("spad", readBuffer, bufferSize);
+	this->getDeviceParameter("spad", readBuffer, bufferSize, "0");
 
-
-	if (status == asynSuccess) {
-	    status = setIntegerParam(enableScratchpad, value);
+	int setSpad;
+	if (sscanf(readBuffer, "%d", &setSpad) == 1 && setSpad == value) {
 	    if (status == asynSuccess)
 	      status = calculateDataSize();
-	} //else {
-
-	    //printf("Failed to set scratchpad: %s\n", readBuffer);
-	//}
+	} else {
+	    asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:writeInt32 Failed to set scratchpad: %s\n", driverName, readBuffer);
+	    status = asynError;
+	}
+	status = setIntegerParam(enableScratchpad, setSpad);
 
     } else {
         /* If this parameter belongs to a base class call its method */
@@ -784,7 +843,6 @@ void dtacq_adc::report(FILE *fp, int details)
     ADDriver::report(fp, details);
 }
 
-// ### TODO: Add some code to this to configure scratchpad. Set this to run on connect.
 int dtacq_adc::postInitConfig()
 {
     const char *functionName = "postInitConfig";
@@ -797,7 +855,7 @@ int dtacq_adc::postInitConfig()
     getIntegerParam(gain, &gainSel);
     status |= calculateConversionFactor(gainSel, &count2volt);
     if (status) {
-        printf("%s:%s failed to calculate the voltage range conversion factor, count2volt=%f\n",
+	asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s failed to calculate the voltage range conversion factor, count2volt=%f\n",
             driverName, functionName, count2volt);
     }
     /* Blank out the gain selection menu for an ACQ420FMC */
@@ -865,10 +923,9 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName, const char 
     createParam("MASTER_SITE", asynParamInt32, &masterSite);
     createParam("AGGR_SITES", asynParamOctet, &aggregationSites);
     createParam("USE_SAMPLE_COUNT", asynParamInt32, &enableScratchpad);
-    createParam("BAD_ARRAY", asynParamInt32, &badFrame);
+    createParam("BAD_ARRAY", asynParamInt32, &badFrames);
 
     /* Set some default values for parameters */
-    // ###TODO: Some of these depend on the scratchpad, so really should be calculated by post init.
     status = setIntegerParam(ADMaxSizeX, nChannels);
     status |= setIntegerParam(ADMaxSizeY, nSamples);
     status |= setIntegerParam(ADSizeX, nChannels);
@@ -882,13 +939,13 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName, const char 
     status |= setIntegerParam(ADNumImages, 100);
     status |= setIntegerParam(channels, nChannels);
     status |= setIntegerParam(enableScratchpad, 0);
-    status |= setIntegerParam(badFrame, 0);
+    status |= setIntegerParam(badFrames, 0);
 
     sampleCount = 0;
     cleanSampleSeen = false;
 
     if (status) {
-        printf("%s: unable to set camera parameters\n", functionName);
+	asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s: unable to set camera parameters\n", functionName);
     }
     /* All three DLS-supported cards happen to have the same selection of voltage ranges */
     std::vector<double> gains;
@@ -907,18 +964,16 @@ dtacq_adc::dtacq_adc(const char *portName, const char *dataPortName, const char 
                                 (EPICSTHREADFUNC)dtacqTaskC,
                                 this) == NULL);
     if (status) {
-        printf("%s:%s epicsThreadCreate failure for image task\n",
+	asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s epicsThreadCreate failure for image task\n",
             driverName, functionName);
     }
     /* Connect to the ip port */
-    // ###TODO: This should be wrapped in an atomic connection handler to make sure we set up our
-    // environment cleanly when we connect.
     status = pasynOctetSyncIO->connect(controlPortName, -1, &this->controlIPPort, NULL);
     if (status)
-        printf("%s:%s failed to connect asyn to control port\n", driverName, functionName);
+      asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s failed to connect asyn to control port\n", driverName, functionName);
     status = drvAsynIPPortConfigure(this->dataPortName, this->dataHostInfo, 0, 1, 0);
     if (status)
-        printf("%s:%s failed to configure data port\n", driverName, functionName);
+      asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, "%s:%s failed to configure data port\n", driverName, functionName);
     /* Register the post-init function */
     dtacq_adcPostInitConfig();
 }
