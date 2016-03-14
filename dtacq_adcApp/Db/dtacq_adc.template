@@ -192,3 +192,14 @@ record(longin, "$(P)$(R)BAD_SAMPLES_RBV")
     field(SCAN, "I/O Intr")
     field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))BAD_ARRAY")
 }
+
+####################################################################
+# Readout of number of channels
+####################################################################
+
+record(longin, "$(P)$(R)CHANNELS_RBV")
+{
+    field(DTYP, "asynInt32")
+    field(SCAN, "I/O Intr")
+    field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CHANNELS")
+}
