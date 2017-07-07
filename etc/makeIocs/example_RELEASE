@@ -1,3 +1,3 @@
 # Place any example specific dependencies here
-ADUTIL=$(SUPPORT)/adUtil/2-7
-USERIO=$(SUPPORT)/userIO/2-21
+ADUTIL=$(SUPPORT)/adUtil/2-13
+USERIO=$(SUPPORT)/userIO/2-26
