@@ -8,6 +8,7 @@
 #% macro, INVERT, If 1 then multiply output signals by -1
 #% macro, MASTER_SITE, The location of the card that sets the clock \
 # (this may require setting /etc/acq400/n/peers)
+#% macro, DTACQ_HOSTNAME, The hostname of the DTACQ system
 #% macro, AGGREGATION_SITES, A comma seperated list of sites to read from
 
 # This associates the template with an edm screen
@@ -202,4 +203,29 @@ record(longin, "$(P)$(R)CHANNELS_RBV")
     field(DTYP, "asynInt32")
     field(SCAN, "I/O Intr")
     field(INP, "@asyn($(PORT),$(ADDR),$(TIMEOUT))CHANNELS")
+}
+
+
+record(ao, "$(P)$(R)SAMPLE_RATE")
+{
+  field(DTYP, "Soft Channel")
+  field(SCAN, "Passive")
+  field(EGU,  "Hz")
+  field(OUT,  "$(DTACQ_HOSTNAME):$(MASTER_SITE=1):ACQ43X_SAMPLE_RATE")
+}
+
+record(ai, "$(P)$(R)SAMPLE_RATE_RBV")
+{
+  field(DTYP, "Soft Channel")
+  field(SCAN, ".5 second")
+  field(EGU,  "Hz")
+  field(INP,  "$(DTACQ_HOSTNAME):$(MASTER_SITE=1):ACQ43X_SAMPLE_RATE")
+}
+
+record(ai, "$(P)$(R)ACTUAL_SAMPLE_RATE_RBV")
+{
+  field(DTYP, "Soft Channel")
+  field(SCAN, ".5 second")
+  field(EGU,  "Hz")
+  field(INP,  "$(DTACQ_HOSTNAME):$(MASTER_SITE=1):SIG:sample_count:FREQ")
 }

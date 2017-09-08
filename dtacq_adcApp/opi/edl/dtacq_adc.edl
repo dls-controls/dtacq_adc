@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 790
-y 196
+x 800
+y 110
 w 390
 h 820
 font "arial-bold-r-12.0"
@@ -23,6 +23,21 @@ showGrid
 snapToGrid
 gridSize 5
 endScreenProperties
+
+# (Rectangle)
+object activeRectangleClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 5
+y 430
+w 380
+h 130
+lineColor index 14
+fill
+fillColor index 3
+endObjectProperties
 
 # (Shell Command)
 object shellCmdClass
@@ -1685,5 +1700,174 @@ bgColor index 10
 fill
 font "arial-bold-r-12.0"
 fontAlign "center"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 455
+w 130
+h 13
+font "arial-bold-r-12.0"
+fontAlign "center"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Set ADC Sample Rate:"
+}
+autoSize
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 490
+w 219
+h 13
+font "arial-bold-r-12.0"
+fontAlign "center"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Current setting for ADC Sample Rate:"
+}
+autoSize
+endObjectProperties
+
+# (Text Control)
+object activeXTextDspClass
+beginObjectProperties
+major 4
+minor 6
+release 0
+x 145
+y 450
+w 140
+h 25
+controlPv "$(P)$(R)SAMPLE_RATE"
+font "arial-bold-r-12.0"
+fgColor index 25
+bgColor index 6
+editable
+precision 0
+nullColor index 0
+useHexPrefix
+newPos
+objType "controls"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 525
+w 150
+h 13
+font "arial-bold-r-12.0"
+fontAlign "center"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Actual ADC Sample Rate:"
+}
+autoSize
+endObjectProperties
+
+# (Text Monitor)
+object activeXTextDspClass:noedit
+beginObjectProperties
+major 4
+minor 6
+release 0
+x 235
+y 485
+w 140
+h 25
+controlPv "$(P)$(R)SAMPLE_RATE_RBV"
+font "arial-bold-r-12.0"
+fgColor index 16
+bgColor index 11
+limitsFromDb
+nullColor index 0
+useHexPrefix
+showUnits
+newPos
+objType "monitors"
+endObjectProperties
+
+# (Text Monitor)
+object activeXTextDspClass:noedit
+beginObjectProperties
+major 4
+minor 6
+release 0
+x 165
+y 520
+w 140
+h 25
+controlPv "$(P)$(R)ACTUAL_SAMPLE_RATE_RBV"
+font "arial-bold-r-12.0"
+fgColor index 16
+bgColor index 11
+limitsFromDb
+nullColor index 0
+useHexPrefix
+showUnits
+newPos
+objType "monitors"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 290
+y 450
+w 20
+h 25
+font "arial-bold-r-16.0"
+fontAlign "center"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Hz"
+}
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 5
+y 425
+w 98
+h 13
+font "arial-medium-r-12.0"
+fgColor index 14
+bgColor index 5
+value {
+  "  Sampling Rate  "
+}
+autoSize
+border
 endObjectProperties
 
