@@ -1,0 +1,15 @@
+O.*
+dbd/
+lib/
+bin/
+db/
+data/
+documentation/doxygen
+iocs/example
+iocs/example_sim
+.cproject
+.project
+.settings/
+
+*.swp
+
